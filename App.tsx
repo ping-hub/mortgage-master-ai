@@ -79,6 +79,44 @@ const InputCell = ({ label, value, onChange, unit, type = "number", step, placeh
     );
 };
 
+// Helper for Bare Input (Smart Cards) that handles "0" state correctly
+const BareInput = ({ value, onChange, className, type = "number", ...props }: any) => {
+    const [localValue, setLocalValue] = useState(value === 0 ? '' : value.toString());
+
+    useEffect(() => {
+        const numericLocal = parseFloat(localValue);
+        const numericProp = Number(value);
+
+        if (numericLocal === numericProp) return;
+        if (numericProp === 0 && localValue === '') return;
+
+        setLocalValue(numericProp === 0 ? '' : numericProp.toString());
+    }, [value, localValue]);
+
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        let raw = e.target.value;
+        
+        if (raw.length > 1 && raw.startsWith('0') && raw[1] !== '.') {
+            raw = raw.replace(/^0+/, '');
+            if (raw === '') raw = '0';
+        }
+
+        setLocalValue(raw);
+        e.target.value = raw;
+        onChange(e);
+    };
+
+    return (
+        <input 
+            type={type}
+            value={localValue} 
+            onChange={handleChange}
+            className={className}
+            {...props}
+        />
+    );
+};
+
 export const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'new' | 'existing' | 'smart'>('new');
   
@@ -102,7 +140,7 @@ export const App: React.FC = () => {
     commercial: {
         principal: 100,
         months: 240,
-        rate: 3.50,
+        rate: 3.50, 
         method: PaymentMethod.EPI
     },
     provident: {
@@ -627,11 +665,10 @@ export const App: React.FC = () => {
                                 <div className="flex justify-between items-center border-b border-white/10 pb-2">
                                     <span className="text-sm font-medium text-white/80">贷款本金</span>
                                     <div className="flex items-baseline gap-1">
-                                       <input 
-                                           type="number" 
+                                       <BareInput 
                                            inputMode="decimal"
                                            value={smartParams.principal} 
-                                           onChange={e => setSmartParams({...smartParams, principal: Number(e.target.value)})} 
+                                           onChange={(e: any) => setSmartParams({...smartParams, principal: Number(e.target.value)})} 
                                            className="bg-transparent text-right font-black text-2xl w-24 outline-none placeholder-white/30 focus:border-b-2 border-white/50 transition-all" 
                                        />
                                        <span className="text-sm font-medium">万</span>
@@ -640,12 +677,11 @@ export const App: React.FC = () => {
                                 <div className="flex justify-between items-center border-b border-white/10 pb-2">
                                     <span className="text-sm font-medium text-white/80">年利率</span>
                                     <div className="flex items-baseline gap-1">
-                                       <input 
-                                           type="number" 
+                                       <BareInput 
                                            inputMode="decimal"
                                            step="0.01" 
                                            value={smartParams.rate} 
-                                           onChange={e => setSmartParams({...smartParams, rate: Number(e.target.value)})} 
+                                           onChange={(e: any) => setSmartParams({...smartParams, rate: Number(e.target.value)})} 
                                            className="bg-transparent text-right font-black text-2xl w-24 outline-none placeholder-white/30 focus:border-b-2 border-white/50 transition-all" 
                                        />
                                        <span className="text-sm font-medium">%</span>
@@ -654,11 +690,10 @@ export const App: React.FC = () => {
                                 <div className="flex justify-between items-center">
                                     <span className="text-sm font-medium text-white/80">贷款年限</span>
                                     <div className="flex items-baseline gap-1">
-                                       <input 
-                                           type="number" 
+                                       <BareInput 
                                            inputMode="decimal"
                                            value={smartParams.years} 
-                                           onChange={e => setSmartParams({...smartParams, years: Number(e.target.value)})} 
+                                           onChange={(e: any) => setSmartParams({...smartParams, years: Number(e.target.value)})} 
                                            className="bg-transparent text-right font-black text-2xl w-24 outline-none placeholder-white/30 focus:border-b-2 border-white/50 transition-all" 
                                        />
                                        <span className="text-sm font-medium">年</span>
@@ -701,13 +736,12 @@ export const App: React.FC = () => {
                                  <div className="bg-slate-50 rounded-xl p-4 flex items-center justify-between relative">
                                      <label className="text-sm font-bold text-slate-600">目标年限</label>
                                      <div className="flex items-center gap-2">
-                                         <input 
-                                             type="number" 
+                                         <BareInput 
                                              inputMode="decimal"
                                              max={smartParams.years - 1}
                                              value={targetYearsInput} 
-                                             onChange={(e) => setTargetYearsInput(Number(e.target.value))}
-                                             onBlur={(e) => handleSmartYears(Number(e.target.value))} 
+                                             onChange={(e: any) => setTargetYearsInput(Number(e.target.value))}
+                                             onBlur={(e: any) => handleSmartYears(Number(e.target.value))} 
                                              className="w-16 text-center bg-white border border-slate-200 rounded-lg py-1.5 font-bold text-indigo-600 outline-none focus:ring-2 focus:ring-indigo-100" 
                                          />
                                          <span className="text-sm font-bold text-slate-400">年</span>
@@ -780,13 +814,12 @@ export const App: React.FC = () => {
                                  <div className="bg-slate-50 rounded-xl p-4 flex items-center justify-between relative">
                                      <label className="text-sm font-bold text-slate-600">利息上限</label>
                                      <div className="flex items-center gap-2">
-                                         <input 
-                                             type="number" 
+                                         <BareInput 
                                              inputMode="decimal"
                                              max={(smartBaseData.totalInterest/10000) - 1}
                                              value={maxInterestInput}
-                                             onChange={(e) => setMaxInterestInput(Number(e.target.value))}
-                                             onBlur={(e) => handleSmartInterest(Number(e.target.value))} 
+                                             onChange={(e: any) => setMaxInterestInput(Number(e.target.value))}
+                                             onBlur={(e: any) => handleSmartInterest(Number(e.target.value))} 
                                              className="w-16 text-center bg-white border border-slate-200 rounded-lg py-1.5 font-bold text-rose-500 outline-none focus:ring-2 focus:ring-rose-100" 
                                          />
                                          <span className="text-sm font-bold text-slate-400">万</span>
@@ -859,13 +892,12 @@ export const App: React.FC = () => {
                                  <div className="bg-slate-50 rounded-xl p-4 flex items-center justify-between relative">
                                      <label className="text-sm font-bold text-slate-600">期望月供</label>
                                      <div className="flex items-center gap-2">
-                                         <input 
-                                             type="number" 
+                                         <BareInput 
                                              inputMode="decimal"
                                              max={Math.round(smartBaseData.monthly) - 1}
                                              value={targetPaymentInput}
-                                             onChange={(e) => setTargetPaymentInput(Number(e.target.value))}
-                                             onBlur={(e) => handleSmartPayment(Number(e.target.value))} 
+                                             onChange={(e: any) => setTargetPaymentInput(Number(e.target.value))}
+                                             onBlur={(e: any) => handleSmartPayment(Number(e.target.value))} 
                                              className="w-20 text-center bg-white border border-slate-200 rounded-lg py-1.5 font-bold text-emerald-500 outline-none focus:ring-2 focus:ring-emerald-100" 
                                          />
                                          <span className="text-sm font-bold text-slate-400">元</span>
@@ -924,11 +956,10 @@ export const App: React.FC = () => {
                                     <div className="bg-slate-50 rounded-xl p-3">
                                         <label className="text-xs font-bold text-slate-500 block mb-1">每年多还</label>
                                         <div className="flex items-center gap-1">
-                                            <input 
-                                                type="number" 
+                                            <BareInput 
                                                 inputMode="decimal"
                                                 value={smartParams.annualAmount}
-                                                onChange={(e) => setSmartParams({...smartParams, annualAmount: Number(e.target.value)})}
+                                                onChange={(e: any) => setSmartParams({...smartParams, annualAmount: Number(e.target.value)})}
                                                 className="w-full bg-transparent font-bold text-blue-600 outline-none text-lg" 
                                             />
                                             <span className="text-xs font-bold text-slate-400">万</span>
