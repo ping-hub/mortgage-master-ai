@@ -1,5 +1,6 @@
+
 import React, { useState, useRef, useMemo, useEffect } from 'react';
-import { Calculator, PieChart, Banknote, ArrowRight, TrendingDown, Clock, Coins, ChevronRight, CheckCircle2, Info, Sparkles, Calendar, ArrowRightCircle, RefreshCw } from 'lucide-react';
+import { Calculator, PieChart, Banknote, ArrowRight, TrendingDown, Clock, Coins, ChevronRight, CheckCircle2, Info, Sparkles, Calendar, ArrowRightCircle, RefreshCw, X, PiggyBank } from 'lucide-react';
 import { LoanParams, LoanType, FullComparison, PaymentMethod, ExistingLoanState } from './types';
 import { 
     calculateMortgage, 
@@ -15,57 +16,201 @@ import { ResultsChart } from './components/ResultsChart';
 import { GeminiInput } from './components/GeminiInput';
 import { RepaymentList } from './components/RepaymentList';
 
-// Helper for Cell Style Input - Moved outside App to prevent re-render focus loss
-const InputCell = ({ label, value, onChange, unit, type = "number", step, placeholder = "0", actionIcon, onAction }: any) => {
-    const [localValue, setLocalValue] = useState(value === 0 ? '' : value.toString());
+// --- Year Picker Component (Wheel Style) ---
+const YearSheet = ({ isOpen, onClose, value, onSelect }: { isOpen: boolean, onClose: () => void, value: number, onSelect: (val: number) => void }) => {
+    const scrollRef = useRef<HTMLDivElement>(null);
+    const [selectedValue, setSelectedValue] = useState(value);
+    const ITEM_HEIGHT = 50; 
+    const CONTAINER_HEIGHT = 250;
+
+    // Sync state when opening
+    useEffect(() => {
+        if (isOpen) {
+            setSelectedValue(value);
+            // Wait for render to scroll
+            setTimeout(() => {
+                if (scrollRef.current) {
+                    scrollRef.current.scrollTop = (value - 1) * ITEM_HEIGHT;
+                }
+            }, 10);
+        }
+    }, [isOpen, value]);
+
+    const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+        const scrollTop = e.currentTarget.scrollTop;
+        const index = Math.round(scrollTop / ITEM_HEIGHT);
+        const year = index + 1;
+        if (year >= 1 && year <= 30) {
+            if (year !== selectedValue) {
+                 setSelectedValue(year);
+            }
+        }
+    };
+
+    const handleConfirm = () => {
+        onSelect(selectedValue);
+        onClose();
+    };
+
+    if (!isOpen) return null;
+    
+    const years = Array.from({length: 30}, (_, i) => i + 1);
+    
+    // Padding to center the first and last items
+    // (Container Height - Item Height) / 2
+    const paddingY = (CONTAINER_HEIGHT - ITEM_HEIGHT) / 2;
+
+    return (
+        <div className="fixed inset-0 z-[100] flex flex-col justify-end bg-black/40 backdrop-blur-sm animate-fade-in" onClick={onClose}>
+            <div 
+                className="bg-white rounded-t-[32px] w-full pb-safe shadow-2xl animate-fade-in-up overflow-hidden" 
+                onClick={e => e.stopPropagation()}
+            >
+                {/* Toolbar */}
+                <div className="flex justify-between items-center p-4 border-b border-gray-100 bg-white z-20 relative">
+                    <button onClick={onClose} className="text-gray-400 font-medium px-4 py-2 hover:bg-gray-50 rounded-lg transition-colors">取消</button>
+                    <h3 className="text-lg font-bold text-slate-800">选择年限</h3>
+                    <button onClick={handleConfirm} className="text-indigo-600 font-bold px-4 py-2 hover:bg-indigo-50 rounded-lg transition-colors">确定</button>
+                </div>
+
+                {/* Wheel Picker */}
+                <div className="relative w-full bg-white select-none" style={{ height: CONTAINER_HEIGHT }}>
+                    
+                    {/* Highlight Zone (Center) */}
+                    <div 
+                        className="absolute left-0 right-0 pointer-events-none z-10 border-t border-b border-indigo-100 bg-indigo-50/30"
+                        style={{ 
+                            top: '50%', 
+                            transform: 'translateY(-50%)', 
+                            height: ITEM_HEIGHT 
+                        }}
+                    ></div>
+
+                    {/* Gradients for depth */}
+                    <div className="absolute top-0 left-0 right-0 h-20 bg-gradient-to-b from-white to-transparent z-10 pointer-events-none"></div>
+                    <div className="absolute bottom-0 left-0 right-0 h-20 bg-gradient-to-t from-white to-transparent z-10 pointer-events-none"></div>
+
+                    {/* Scrollable List */}
+                    <div
+                        ref={scrollRef}
+                        onScroll={handleScroll}
+                        className="h-full overflow-y-auto snap-y snap-mandatory [&::-webkit-scrollbar]:hidden"
+                        style={{ paddingBlock: paddingY }}
+                    >
+                        {years.map(y => (
+                            <div
+                                key={y}
+                                onClick={() => {
+                                    if(scrollRef.current) {
+                                        scrollRef.current.scrollTo({
+                                            top: (y - 1) * ITEM_HEIGHT,
+                                            behavior: 'smooth'
+                                        });
+                                        setSelectedValue(y);
+                                    }
+                                }}
+                                className="flex items-center justify-center snap-center transition-all duration-200 cursor-pointer"
+                                style={{ 
+                                    height: ITEM_HEIGHT,
+                                    opacity: selectedValue === y ? 1 : 0.4,
+                                    transform: selectedValue === y ? 'scale(1.1)' : 'scale(0.95)',
+                                    fontWeight: selectedValue === y ? 700 : 400,
+                                    color: selectedValue === y ? '#4f46e5' : '#94a3b8'
+                                }}
+                            >
+                                <span className="text-2xl">{y}</span>
+                                <span className="text-sm ml-1 mt-1 font-medium">年</span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// Helper for Cell Style Input
+const InputCell = ({ label, value, onChange, unit, step, placeholder = "0", actionIcon, onAction, readOnly = false, onClick }: any) => {
+    const [localValue, _setLocalValue] = useState(value === 0 ? '' : value.toString());
+    const localValueRef = useRef(localValue);
+    const timeoutRef = useRef<any>(null);
+
+    const setLocalValue = (val: string) => {
+        localValueRef.current = val;
+        _setLocalValue(val);
+    };
 
     useEffect(() => {
         const numericLocal = parseFloat(localValue);
         const numericProp = Number(value);
 
-        // Avoid overwriting user input if it essentially matches the prop value
-        // e.g. User types "1.", prop is 1. Don't overwrite.
-        if (numericLocal === numericProp) return;
-
-        // Special case: Prop is 0, Local is empty. Treat as match to keep field empty.
-        if (numericProp === 0 && localValue === '') return;
-
-        // Otherwise, parent controlled update (e.g. from AI or calculation reset)
-        setLocalValue(numericProp === 0 ? '' : numericProp.toString());
-    }, [value, localValue]);
-
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        let raw = e.target.value;
-        
-        // UX Fix: Prevent "05", "050" etc. Strip leading zeros unless it's "0." or just "0"
-        if (raw.length > 1 && raw.startsWith('0') && raw[1] !== '.') {
-            raw = raw.replace(/^0+/, '');
-            if (raw === '') raw = '0';
+        if (isNaN(numericLocal)) {
+             if (localValue === '' && numericProp === 0) return;
+             if (localValue === '.' && numericProp === 0) return;
         }
 
-        setLocalValue(raw);
+        if (numericLocal === numericProp) return;
         
-        // Pass corrected value to parent
-        onChange({
-            ...e,
-            target: {
-                ...e.target,
-                value: raw
-            }
-        });
+        setLocalValue(numericProp === 0 ? '' : numericProp.toString());
+    }, [value]);
+
+    useEffect(() => {
+        return () => {
+            if (timeoutRef.current) clearTimeout(timeoutRef.current);
+        };
+    }, []);
+
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const raw = e.target.value;
+        
+        if (raw === '') {
+            setLocalValue('');
+            if (timeoutRef.current) clearTimeout(timeoutRef.current);
+            timeoutRef.current = setTimeout(() => {
+                onChange({ ...e, target: { ...e.target, value: '' } });
+            }, 300);
+            return;
+        }
+
+        // Professional Validation: Digits & Dot only
+        if (!/^\d*\.?\d*$/.test(raw)) return;
+        
+        // Safety: Prevent excessive length
+        if (raw.replace('.', '').length > 9) return;
+
+        let clean = raw;
+        if (clean.length > 1 && clean.startsWith('0') && clean[1] !== '.') {
+            clean = clean.replace(/^0+/, '');
+            if (clean === '') clean = '0';
+        }
+        
+        setLocalValue(clean);
+        
+        if (timeoutRef.current) clearTimeout(timeoutRef.current);
+        timeoutRef.current = setTimeout(() => {
+             onChange({ target: { value: clean } });
+        }, 300);
+    };
+
+    const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+        if (timeoutRef.current) {
+            clearTimeout(timeoutRef.current);
+            onChange({ target: { value: localValueRef.current } });
+        }
     };
 
     return (
-        <div className="flex items-center justify-between py-4 border-b border-gray-100 last:border-0">
+        <div className="flex items-center justify-between py-4 border-b border-gray-100 last:border-0" onClick={onClick}>
             <label className="text-gray-700 font-medium shrink-0">{label}</label>
-            <div className="flex items-center gap-2 flex-1 justify-end">
+            <div className={`flex items-center gap-2 flex-1 justify-end ${readOnly ? 'cursor-pointer' : ''}`}>
                 <input 
-                    type={type}
-                    inputMode="decimal"
-                    value={localValue} 
-                    step={step}
-                    onChange={handleChange}
-                    className="text-right font-bold text-slate-900 bg-transparent outline-none w-full placeholder-gray-300 focus:text-indigo-600 transition-colors text-lg"
+                    type="text"
+                    inputMode={readOnly ? undefined : "decimal"}
+                    value={readOnly ? value : localValue} 
+                    readOnly={readOnly}
+                    onChange={readOnly ? undefined : handleChange}
+                    onBlur={readOnly ? undefined : handleBlur}
+                    className={`text-right font-bold text-slate-900 bg-transparent outline-none w-full placeholder-gray-300 focus:text-indigo-600 transition-colors text-lg ${readOnly ? 'cursor-pointer pointer-events-none' : ''}`}
                     placeholder={placeholder}
                 />
                 {actionIcon && (
@@ -74,44 +219,89 @@ const InputCell = ({ label, value, onChange, unit, type = "number", step, placeh
                     </button>
                 )}
                 {unit && <span className="text-gray-400 text-sm font-medium shrink-0">{unit}</span>}
+                {readOnly && <ChevronRight size={18} className="text-gray-400 shrink-0 ml-1" />}
             </div>
         </div>
     );
 };
 
-// Helper for Bare Input (Smart Cards) that handles "0" state correctly
-const BareInput = ({ value, onChange, className, type = "number", ...props }: any) => {
-    const [localValue, setLocalValue] = useState(value === 0 ? '' : value.toString());
+// Helper for Bare Input (Smart Cards)
+const BareInput = ({ value, onChange, className, readOnly, onClick, onBlur, ...props }: any) => {
+    const [localValue, _setLocalValue] = useState(value === 0 ? '' : value.toString());
+    const localValueRef = useRef(localValue);
+    const timeoutRef = useRef<any>(null);
+
+    const setLocalValue = (val: string) => {
+        localValueRef.current = val;
+        _setLocalValue(val);
+    };
 
     useEffect(() => {
         const numericLocal = parseFloat(localValue);
         const numericProp = Number(value);
-
-        if (numericLocal === numericProp) return;
-        if (numericProp === 0 && localValue === '') return;
-
-        setLocalValue(numericProp === 0 ? '' : numericProp.toString());
-    }, [value, localValue]);
-
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        let raw = e.target.value;
         
-        if (raw.length > 1 && raw.startsWith('0') && raw[1] !== '.') {
-            raw = raw.replace(/^0+/, '');
-            if (raw === '') raw = '0';
+        if (isNaN(numericLocal)) {
+             if (localValue === '' && numericProp === 0) return;
+             if (localValue === '.' && numericProp === 0) return;
         }
 
-        setLocalValue(raw);
-        e.target.value = raw;
-        onChange(e);
+        if (numericLocal === numericProp) return;
+        setLocalValue(numericProp === 0 ? '' : numericProp.toString());
+    }, [value]);
+
+    useEffect(() => {
+        return () => {
+            if (timeoutRef.current) clearTimeout(timeoutRef.current);
+        };
+    }, []);
+
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const raw = e.target.value;
+
+        if (raw === '') {
+            setLocalValue('');
+            if (timeoutRef.current) clearTimeout(timeoutRef.current);
+            timeoutRef.current = setTimeout(() => {
+                 onChange({ target: { value: '' } });
+            }, 300);
+            return;
+        }
+
+        if (!/^\d*\.?\d*$/.test(raw)) return;
+        if (raw.replace('.', '').length > 9) return;
+
+        let clean = raw;
+        if (clean.length > 1 && clean.startsWith('0') && clean[1] !== '.') {
+            clean = clean.replace(/^0+/, '');
+            if (clean === '') clean = '0';
+        }
+        
+        setLocalValue(clean);
+        
+        if (timeoutRef.current) clearTimeout(timeoutRef.current);
+        timeoutRef.current = setTimeout(() => {
+             onChange({ target: { value: clean } });
+        }, 300);
+    };
+
+    const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+        if (timeoutRef.current) {
+            clearTimeout(timeoutRef.current);
+            onChange({ target: { value: localValueRef.current } });
+        }
+        if (onBlur) onBlur(e);
     };
 
     return (
         <input 
-            type={type}
-            value={localValue} 
-            onChange={handleChange}
-            className={className}
+            type="text"
+            inputMode={readOnly ? undefined : "decimal"}
+            value={readOnly ? value : localValue} 
+            onChange={readOnly ? undefined : handleChange}
+            onClick={onClick}
+            onBlur={readOnly ? undefined : handleBlur}
+            readOnly={readOnly}
+            className={`${className} ${readOnly ? 'cursor-pointer' : ''}`}
             {...props}
         />
     );
@@ -157,12 +347,20 @@ export const App: React.FC = () => {
   const [methodResult, setMethodResult] = useState<any>(null);
 
   // Tab 3 State
-  const [smartParams, setSmartParams] = useState({
+  const [smartParams, setSmartParams] = useState<{
+      principal: number;
+      rate: number;
+      years: number;
+      annualAmount: number;
+      annualMonth: number;
+      annualStrategy: 'shorten' | 'reduce';
+  }>({
      principal: 100,
      rate: 3.50,
      years: 30,
      annualAmount: 5,
-     annualMonth: 1
+     annualMonth: 1,
+     annualStrategy: 'shorten'
   });
   
   // Specific inputs for calculations
@@ -171,6 +369,21 @@ export const App: React.FC = () => {
   const [targetPaymentInput, setTargetPaymentInput] = useState(5000);
 
   const [smartResult, setSmartResult] = useState<any>({});
+
+  // Picker State
+  const [yearPicker, setYearPicker] = useState<{
+      isOpen: boolean;
+      value: number;
+      onSelect: (val: number) => void;
+  }>({ isOpen: false, value: 30, onSelect: () => {} });
+
+  const openYearPicker = (currentVal: number, onSelect: (val: number) => void) => {
+      setYearPicker({
+          isOpen: true,
+          value: currentVal,
+          onSelect
+      });
+  };
 
   // Memoize base data for Smart Strategy comparison
   const smartBaseData = useMemo(() => {
@@ -191,41 +404,32 @@ export const App: React.FC = () => {
      };
   }, [smartParams.principal, smartParams.rate, smartParams.years]);
 
-  // Effect: Auto-update smart strategy inputs based on baseline data to provide "humanized" defaults
+  // Effect: Auto-update smart strategy inputs based on baseline data
   useEffect(() => {
-      // 1. Target Years: Default to current - 5 (or 5 if too short)
+      // 1. Target Years: Default to current - 5
       const suggestedYears = Math.max(1, smartParams.years - 5);
       setTargetYearsInput(suggestedYears);
 
       // 2. Max Interest: Default to nearest lower multiple of 10
       const currentInterestWan = smartBaseData.totalInterest / 10000;
       let suggestedInterest = Math.floor(currentInterestWan / 10) * 10;
-      // If rounding didn't lower it (e.g. exactly 60.0), step down by 10
-      if (suggestedInterest >= currentInterestWan) {
-          suggestedInterest -= 10;
-      }
-      // If it falls too low (e.g. < 0), use a safer 90% fallback
-      if (suggestedInterest <= 0) {
-          suggestedInterest = Math.floor(currentInterestWan * 0.9);
-      }
+      if (suggestedInterest >= currentInterestWan) suggestedInterest -= 10;
+      if (suggestedInterest <= 0) suggestedInterest = Math.floor(currentInterestWan * 0.9);
       setMaxInterestInput(Math.max(1, suggestedInterest));
 
-      // 3. Target Payment: Round down current payment to nearest 500 or 1000
+      // 3. Target Payment: Round down current payment
       const currentMonthly = smartBaseData.monthly;
       let suggestedPayment = 0;
       if (currentMonthly > 1000) {
-          // e.g. 4297 -> 4000
           suggestedPayment = Math.floor(currentMonthly / 1000) * 1000; 
           if (suggestedPayment === 0) suggestedPayment = Math.floor(currentMonthly / 500) * 500;
       } else {
           suggestedPayment = Math.floor(currentMonthly / 100) * 100;
       }
-      // Ensure it's non-zero and less than current
       if (suggestedPayment >= currentMonthly) suggestedPayment = Math.floor(currentMonthly * 0.9);
       
       setTargetPaymentInput(Math.max(100, suggestedPayment));
 
-      // Reset results when base data changes
       setSmartResult({});
   }, [smartBaseData, smartParams.years]);
 
@@ -275,7 +479,14 @@ export const App: React.FC = () => {
       setSmartResult({ ...smartResult, payment: res });
   };
   const handleSmartAnnual = () => {
-      const res = calculateSmartAnnualPrepayment(smartParams.principal, smartParams.rate, smartParams.years, smartParams.annualAmount, smartParams.annualMonth);
+      const res = calculateSmartAnnualPrepayment(
+          smartParams.principal, 
+          smartParams.rate, 
+          smartParams.years, 
+          smartParams.annualAmount, 
+          smartParams.annualMonth,
+          smartParams.annualStrategy
+      );
       setSmartResult({ ...smartResult, annual: res });
   };
   
@@ -364,7 +575,7 @@ export const App: React.FC = () => {
                         <ul className="space-y-1.5 opacity-90">
                             <li>• <strong>贷款金额</strong>：填写入账本金（不含首付），单位为万元。</li>
                             <li>• <strong>参考利率</strong>：LPR报价 3.50%，公积金 2.60% (5年以上)。</li>
-                            <li>• <strong>贷款年限</strong>：最长通常为 30 年，组合贷两部分年限可以不同。</li>
+                            <li>• <strong>贷款年限</strong>：最长通常为 30 年。</li>
                         </ul>
                     </div>
 
@@ -390,10 +601,10 @@ export const App: React.FC = () => {
                              <InputCell 
                                 label="商贷年限" 
                                 value={params.commercialYears} 
-                                onChange={(e: any) => setParams({...params, commercialYears: Number(e.target.value)})} 
+                                readOnly={true}
+                                onClick={() => openYearPicker(params.commercialYears, (y) => setParams({...params, commercialYears: y}))}
                                 unit="年" 
-                                placeholder="例: 30"
-                             />
+                            />
                         </div>
                     )}
 
@@ -419,9 +630,9 @@ export const App: React.FC = () => {
                              <InputCell 
                                 label="公积金年限" 
                                 value={params.providentYears} 
-                                onChange={(e: any) => setParams({...params, providentYears: Number(e.target.value)})} 
+                                readOnly={true}
+                                onClick={() => openYearPicker(params.providentYears, (y) => setParams({...params, providentYears: y}))}
                                 unit="年" 
-                                placeholder="例: 30"
                              />
                         </div>
                     )}
@@ -488,7 +699,6 @@ export const App: React.FC = () => {
                             <li>• <strong>剩余本金</strong>：请查询银行APP“当前剩余未还本金”（非原始贷款额）。</li>
                             <li>• <strong>剩余期数</strong>：即剩余还款月数（如剩余20年则填240）。</li>
                             <li>• <strong>当前利率</strong>：请输入当前的实际执行利率（LPR+基点）。</li>
-                            <li>• <strong>还款方式</strong>：当前正在使用的还款方式（等额本息/等额本金）。</li>
                         </ul>
                     </div>
 
@@ -642,7 +852,6 @@ export const App: React.FC = () => {
                             <li>• <strong>缩短年限</strong>：适合想早点还清、减少总利息的人群。</li>
                             <li>• <strong>利息控制</strong>：适合对总利息支出有严格预算的人群。</li>
                             <li>• <strong>降低月供</strong>：适合觉得当前月供压力大，想通过一次性还款来减压的人群。</li>
-                            <li>• <strong>固定年冲</strong>：适合每年有固定奖金/结余，想定期加速还款的人群。</li>
                         </ul>
                      </div>
 
@@ -689,14 +898,14 @@ export const App: React.FC = () => {
                                 </div>
                                 <div className="flex justify-between items-center">
                                     <span className="text-sm font-medium text-white/80">贷款年限</span>
-                                    <div className="flex items-baseline gap-1">
+                                    <div className="flex items-baseline gap-1 items-center cursor-pointer" onClick={() => openYearPicker(smartParams.years, (y) => setSmartParams({...smartParams, years: y}))}>
                                        <BareInput 
-                                           inputMode="decimal"
+                                           readOnly={true}
                                            value={smartParams.years} 
-                                           onChange={(e: any) => setSmartParams({...smartParams, years: Number(e.target.value)})} 
-                                           className="bg-transparent text-right font-black text-2xl w-24 outline-none placeholder-white/30 focus:border-b-2 border-white/50 transition-all" 
+                                           className="bg-transparent text-right font-black text-2xl w-24 outline-none placeholder-white/30 focus:border-b-2 border-white/50 transition-all pointer-events-none" 
                                        />
                                        <span className="text-sm font-medium">年</span>
+                                       <ChevronRight size={16} className="text-white/70 ml-1"/>
                                     </div>
                                 </div>
                             </div>
@@ -733,16 +942,13 @@ export const App: React.FC = () => {
                                      </div>
                                  </div>
                                  
-                                 <div className="bg-slate-50 rounded-xl p-4 flex items-center justify-between relative">
+                                 <div className="bg-slate-50 rounded-xl p-4 flex items-center justify-between relative cursor-pointer" onClick={() => openYearPicker(targetYearsInput, (y) => { setTargetYearsInput(y); handleSmartYears(y); })}>
                                      <label className="text-sm font-bold text-slate-600">目标年限</label>
                                      <div className="flex items-center gap-2">
                                          <BareInput 
-                                             inputMode="decimal"
-                                             max={smartParams.years - 1}
+                                             readOnly={true}
                                              value={targetYearsInput} 
-                                             onChange={(e: any) => setTargetYearsInput(Number(e.target.value))}
-                                             onBlur={(e: any) => handleSmartYears(Number(e.target.value))} 
-                                             className="w-16 text-center bg-white border border-slate-200 rounded-lg py-1.5 font-bold text-indigo-600 outline-none focus:ring-2 focus:ring-indigo-100" 
+                                             className="w-16 text-center bg-white border border-slate-200 rounded-lg py-1.5 font-bold text-indigo-600 outline-none pointer-events-none" 
                                          />
                                          <span className="text-sm font-bold text-slate-400">年</span>
                                      </div>
@@ -951,6 +1157,21 @@ export const App: React.FC = () => {
                                          <p className="text-xs text-gray-400">每年有结余？试试定期加速还款</p>
                                      </div>
                                  </div>
+
+                                 <div className="bg-gray-100 p-1 rounded-lg flex mb-4">
+                                     <button 
+                                        onClick={() => setSmartParams({...smartParams, annualStrategy: 'shorten'})} 
+                                        className={`flex-1 py-1.5 rounded-md text-xs font-bold transition-all ${smartParams.annualStrategy === 'shorten' ? 'bg-white shadow text-blue-600' : 'text-gray-400'}`}
+                                     >
+                                        缩短年限
+                                     </button>
+                                     <button 
+                                        onClick={() => setSmartParams({...smartParams, annualStrategy: 'reduce'})} 
+                                        className={`flex-1 py-1.5 rounded-md text-xs font-bold transition-all ${smartParams.annualStrategy === 'reduce' ? 'bg-white shadow text-blue-600' : 'text-gray-400'}`}
+                                     >
+                                        降低月供
+                                     </button>
+                                 </div>
                                  
                                  <div className="grid grid-cols-2 gap-4">
                                     <div className="bg-slate-50 rounded-xl p-3">
@@ -991,35 +1212,77 @@ export const App: React.FC = () => {
                              </div>
                              
                              {smartResult.annual && (
-                                 <div className="bg-blue-50/50 p-5 animate-fade-in space-y-4">
-                                     <div className="grid grid-cols-2 gap-4 text-xs text-slate-500 border-b border-blue-100 pb-3">
-                                         <div>
-                                             <div className="mb-1">原总利息</div>
-                                             <div className="font-bold text-slate-700">¥{(smartResult.annual.originalInterest / 10000).toFixed(2)}万</div>
-                                         </div>
-                                         <div className="text-right">
-                                             <div className="mb-1">新总利息</div>
-                                             <div className="font-bold text-emerald-600 flex items-center justify-end gap-1">
-                                                ¥{((smartResult.annual.originalInterest - smartResult.annual.savedInterest) / 10000).toFixed(2)}万
-                                                <TrendingDown size={12}/>
-                                             </div>
-                                         </div>
+                                 <div className="bg-blue-50/50 p-5 animate-fade-in">
+                                     {/* Top Section: Highlight Savings */}
+                                     <div className="mb-5 text-center">
+                                        <div className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-1">累计共节省利息</div>
+                                        <div className="text-3xl font-black text-emerald-500">
+                                            ¥{(smartResult.annual.savedInterest / 10000).toFixed(2)}万
+                                        </div>
                                      </div>
-                                     
-                                     {/* Key Metrics */}
-                                     <div className="bg-white rounded-lg p-3 border border-blue-100 shadow-sm">
-                                         <div className="flex justify-between items-center mb-2">
-                                             <span className="text-xs font-bold text-emerald-500 uppercase tracking-wider">总利息节省</span>
-                                             <span className="font-bold text-emerald-600">
-                                                ¥{(smartResult.annual.savedInterest / 10000).toFixed(2)}万
+
+                                     {/* Detailed Grid */}
+                                     <div className="bg-white rounded-xl shadow-sm border border-blue-100 p-4 grid grid-cols-2 gap-x-6 gap-y-4">
+                                        {/* Loan Amount */}
+                                        <div className="col-span-2 flex justify-between items-center border-b border-gray-100 pb-2 mb-2">
+                                            <span className="text-xs text-gray-400 font-medium">原贷款额</span>
+                                            <span className="text-sm font-bold text-slate-700">¥{smartParams.principal}万</span>
+                                        </div>
+
+                                        {/* Total Interest Comparison */}
+                                        <div className="space-y-1">
+                                            <div className="text-[10px] text-gray-400 uppercase">总利息变化</div>
+                                            <div className="flex items-center gap-1 text-xs text-gray-400 line-through">
+                                                原 ¥{(smartResult.annual.originalInterest / 10000).toFixed(2)}万
+                                            </div>
+                                            <div className="text-sm font-bold text-emerald-600">
+                                                现 ¥{((smartResult.annual.originalInterest - smartResult.annual.savedInterest) / 10000).toFixed(2)}万
+                                            </div>
+                                        </div>
+
+                                        {/* Duration Comparison */}
+                                        <div className="space-y-1 text-right">
+                                            <div className="text-[10px] text-gray-400 uppercase">
+                                                {smartResult.annual.strategy === 'shorten' ? '还款时长变化' : '还款时长'}
+                                            </div>
+                                            <div className={`flex items-center justify-end gap-1 text-xs text-gray-400 ${smartResult.annual.strategy === 'shorten' ? 'line-through' : ''}`}>
+                                                原 {smartParams.years}年
+                                            </div>
+                                            <div className="text-sm font-bold text-indigo-600">
+                                                {smartResult.annual.strategy === 'shorten' ? (
+                                                    `现 ${smartResult.annual.newYears.toFixed(1)}年`
+                                                ) : (
+                                                    '保持不变'
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* Total Extra Paid */}
+                                        <div className="col-span-2 mt-2 bg-blue-50 rounded-lg p-3 flex items-center justify-between">
+                                            <div className="flex items-center gap-2">
+                                                <PiggyBank size={16} className="text-blue-500" />
+                                                <div className="flex flex-col">
+                                                    <span className="text-xs font-bold text-slate-600">累计年冲投入</span>
+                                                    <span className="text-[10px] text-blue-400">本金额外支出</span>
+                                                </div>
+                                            </div>
+                                            <div className="text-base font-black text-blue-600">
+                                                ¥{(smartResult.annual.totalPrepaymentAmount / 10000).toFixed(2)}万
+                                            </div>
+                                        </div>
+                                     </div>
+
+                                     {/* Summary Footer */}
+                                     <div className="mt-4 text-center text-xs text-slate-500">
+                                         {smartResult.annual.strategy === 'shorten' ? (
+                                             <span>
+                                                 相当于提前 <span className="font-bold text-indigo-600">{smartResult.annual.savedYears.toFixed(1)}年</span> 还清贷款
                                              </span>
-                                         </div>
-                                         <div className="flex justify-between items-center">
-                                             <span className="text-xs font-bold text-emerald-500 uppercase tracking-wider">还款期缩短</span>
-                                             <span className="font-bold text-emerald-600">
-                                                {smartResult.annual.savedYears.toFixed(1)} 年
+                                         ) : (
+                                             <span>
+                                                 期末月供降至 <span className="font-bold text-emerald-600">¥{formatMoney(smartResult.annual.finalMonthly)}</span>
                                              </span>
-                                         </div>
+                                         )}
                                      </div>
                                  </div>
                              )}
@@ -1030,6 +1293,13 @@ export const App: React.FC = () => {
         </div>
       </div>
       <GeminiInput onUpdate={handleAIUpdate} />
+      
+      <YearSheet 
+        isOpen={yearPicker.isOpen} 
+        onClose={() => setYearPicker(prev => ({...prev, isOpen: false}))} 
+        value={yearPicker.value}
+        onSelect={yearPicker.onSelect}
+      />
     </div>
   );
 };

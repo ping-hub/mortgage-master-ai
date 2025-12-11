@@ -9,6 +9,8 @@ interface ComparisonCardsProps {
 
 export const ComparisonCards: React.FC<ComparisonCardsProps> = ({ data }) => {
   const isEPRecommended = data.recommendation === PaymentMethod.EP;
+  
+  const formatWan = (val: number) => (val / 10000).toFixed(2);
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -32,9 +34,15 @@ export const ComparisonCards: React.FC<ComparisonCardsProps> = ({ data }) => {
                 </div>
             </div>
         </div>
-        <div className="bg-slate-50 rounded-xl p-3 flex justify-between items-center">
-            <span className="text-xs text-gray-500">支付利息</span>
-            <span className="text-sm font-bold text-gray-700">¥{(data.epi.totalInterest / 10000).toFixed(2)}万</span>
+        <div className="bg-slate-50 rounded-xl p-3 space-y-2">
+            <div className="flex justify-between items-center">
+                <span className="text-xs text-gray-500">贷款总额</span>
+                <span className="text-sm font-bold text-gray-700">¥{formatWan(data.epi.totalPrincipal)}万</span>
+            </div>
+            <div className="flex justify-between items-center">
+                <span className="text-xs text-gray-500">支付利息</span>
+                <span className="text-sm font-bold text-gray-700">¥{formatWan(data.epi.totalInterest)}万</span>
+            </div>
         </div>
       </div>
 
@@ -65,14 +73,20 @@ export const ComparisonCards: React.FC<ComparisonCardsProps> = ({ data }) => {
             </div>
         </div>
         
-        <div className="bg-slate-50 rounded-xl p-3 flex justify-between items-center mb-2">
-            <span className="text-xs text-gray-500">支付利息</span>
-            <span className="text-sm font-bold text-gray-700">¥{(data.ep.totalInterest / 10000).toFixed(2)}万</span>
+        <div className="bg-slate-50 rounded-xl p-3 space-y-2 mb-2">
+             <div className="flex justify-between items-center">
+                <span className="text-xs text-gray-500">贷款总额</span>
+                <span className="text-sm font-bold text-gray-700">¥{formatWan(data.ep.totalPrincipal)}万</span>
+            </div>
+            <div className="flex justify-between items-center">
+                <span className="text-xs text-gray-500">支付利息</span>
+                <span className="text-sm font-bold text-gray-700">¥{formatWan(data.ep.totalInterest)}万</span>
+            </div>
         </div>
         
         {data.savedInterest > 0 && (
           <div className="text-xs font-bold text-green-600 text-center bg-green-50 py-1.5 rounded-lg">
-            比等额本息省 ¥{(data.savedInterest / 10000).toFixed(2)}万
+            比等额本息省 ¥{formatWan(data.savedInterest)}万
           </div>
         )}
       </div>

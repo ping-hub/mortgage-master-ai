@@ -437,7 +437,8 @@ export const calculateSmartAnnualPrepayment = (
   rate: number,
   years: number,
   annualAmountWan: number,
-  prepayMonth: number // 1-12
+  prepayMonth: number, // 1-12
+  strategy: 'shorten' | 'reduce' = 'shorten'
 ) => {
   const principal = principalWan * 10000;
   const annualPrepay = annualAmountWan * 10000;
@@ -445,27 +446,34 @@ export const calculateSmartAnnualPrepayment = (
   const totalMonths = years * 12;
 
   // 1. Calculate Original Schedule (Standard EPI)
-  // We assume 'Shorten Term' strategy: Maintain the original monthly payment amount
   const originalRes = calculateEPI(principal, rate, totalMonths);
-  const fixedPayment = originalRes.firstMonthPayment;
+  const originalPayment = originalRes.firstMonthPayment;
   const originalInterest = originalRes.totalInterest;
 
   // 2. Simulate New Schedule
   let balance = principal;
   let currentMonth = 0;
   let totalInterest = 0;
+  let totalAnnualPrepay = 0;
+  
+  // For 'reduce', the payment amount changes dynamically.
+  // For 'shorten', it stays constant.
+  let currentPayment = originalPayment;
+  let finalMonthPayment = originalPayment;
 
   // Simulation loop
-  while (balance > 10 && currentMonth < totalMonths * 2) { // Buffer for loop safety
+  // Limit to prevent infinite loops, but allow for standard 30y+
+  const LOOP_LIMIT = totalMonths * 1.5;
+
+  while (balance > 1 && currentMonth < LOOP_LIMIT) { 
     currentMonth++;
     
     // Normal Payment for this month
     const interest = balance * monthlyRate;
-    let principalPaid = fixedPayment - interest;
+    let principalPaid = currentPayment - interest;
     
-    // Payoff check
-    if (balance - principalPaid <= 0) {
-        // Final payoff (simplify: pay remaining balance)
+    // Payoff check (Roundoff errors)
+    if (balance - principalPaid <= 0.1) {
         totalInterest += interest; 
         balance = 0;
         break;
@@ -475,25 +483,37 @@ export const calculateSmartAnnualPrepayment = (
     totalInterest += interest;
 
     // Check Annual Prepayment
-    // If prepayMonth is 1, it means the 1st month of each year (1, 13, 25...)
-    // currentMonth is 1-based index. 
-    // Logic: if currentMonth % 12 === prepayMonth % 12?
-    // If prepayMonth = 1, currentMonth = 1, 13, 25... -> (1-1)%12 + 1 = 1. Correct.
-    // If prepayMonth = 12, currentMonth = 12, 24... -> (12-1)%12 + 1 = 12. Correct.
-    
     const monthInYear = (currentMonth - 1) % 12 + 1;
     if (monthInYear === prepayMonth && balance > 0) {
         const actualPrepay = Math.min(balance, annualPrepay);
         balance -= actualPrepay;
+        totalAnnualPrepay += actualPrepay;
+
+        if (strategy === 'reduce' && balance > 0) {
+            // RE-CALCULATE Monthly Payment for the REMAINING term
+            // Remaining months = totalMonths - currentMonth
+            const remainingMonths = Math.max(1, totalMonths - currentMonth);
+            // Re-calc PMT logic:
+            // PMT = P * r * (1+r)^n / ((1+r)^n - 1)
+            const factor = Math.pow(1 + monthlyRate, remainingMonths);
+            currentPayment = (balance * monthlyRate * factor) / (factor - 1);
+        }
     }
     
-    if (balance <= 0) break;
+    // Safety break if logic forces balance < 0
+    if (balance <= 0.1) break;
   }
+  
+  // Capture the final payment amount (for 'reduce' display)
+  finalMonthPayment = currentPayment;
 
   return {
-    savedYears: Math.max(0, (totalMonths - currentMonth) / 12),
+    savedYears: strategy === 'shorten' ? Math.max(0, (totalMonths - currentMonth) / 12) : 0,
     newYears: currentMonth / 12,
     savedInterest: Math.max(0, originalInterest - totalInterest),
-    originalInterest: originalInterest
+    originalInterest: originalInterest,
+    finalMonthly: finalMonthPayment,
+    strategy: strategy,
+    totalPrepaymentAmount: totalAnnualPrepay
   };
 };

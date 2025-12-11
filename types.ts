@@ -92,4 +92,7 @@ export interface SmartResult {
   // Annual Strategy
   savedYears?: number;
   newYears?: number;
+  finalMonthly?: number;
+  strategy?: 'shorten' | 'reduce';
+  totalPrepaymentAmount?: number; // Total amount paid via annual prepayments
 }
