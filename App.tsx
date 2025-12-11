@@ -1,6 +1,5 @@
-
 import React, { useState, useRef, useMemo, useEffect } from 'react';
-import { Calculator, PieChart, Banknote, ArrowRight, TrendingDown, Clock, Coins, ChevronRight, CheckCircle2, Info, Sparkles, Calendar, ArrowRightCircle, RefreshCw, X, PiggyBank } from 'lucide-react';
+import { Calculator, PieChart, Banknote, ArrowRight, TrendingDown, Clock, Coins, ChevronRight, CheckCircle2, Info, Sparkles, Calendar, ArrowRightCircle, RefreshCw, X, PiggyBank, Lightbulb } from 'lucide-react';
 import { LoanParams, LoanType, FullComparison, PaymentMethod, ExistingLoanState } from './types';
 import { 
     calculateMortgage, 
@@ -484,13 +483,14 @@ export const App: React.FC = () => {
           smartParams.rate, 
           smartParams.years, 
           smartParams.annualAmount, 
-          smartParams.annualMonth,
+          smartParams.annualMonth, 
           smartParams.annualStrategy
       );
       setSmartResult({ ...smartResult, annual: res });
   };
   
   const formatMoney = (val: number) => val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const formatWan = (val: number) => (val / 10000).toFixed(2);
 
   const handleAIUpdate = (newParams: Partial<LoanParams>) => {
       setParams(prev => ({ ...prev, ...newParams }));
@@ -507,7 +507,7 @@ export const App: React.FC = () => {
                 <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white">
                     <Calculator size={18} />
                 </div>
-                房贷精算师
+                房贷智策
             </h1>
             <p className="text-gray-400 text-xs font-medium pl-10">AI智能规划 · 提前还款 · 省息策略</p>
             
@@ -693,7 +693,7 @@ export const App: React.FC = () => {
                     {/* Guide Text */}
                     <div className="bg-indigo-50 border border-indigo-100 p-4 rounded-xl text-xs text-indigo-700 leading-relaxed shadow-sm">
                         <div className="flex items-center gap-2 font-bold mb-2 text-indigo-800">
-                            <Info size={14} /> 参数填写指南
+                            <Info size={14} /> 填写指南
                         </div>
                         <ul className="space-y-1.5 opacity-90">
                             <li>• <strong>剩余本金</strong>：请查询银行APP“当前剩余未还本金”（非原始贷款额）。</li>
@@ -852,6 +852,7 @@ export const App: React.FC = () => {
                             <li>• <strong>缩短年限</strong>：适合想早点还清、减少总利息的人群。</li>
                             <li>• <strong>利息控制</strong>：适合对总利息支出有严格预算的人群。</li>
                             <li>• <strong>降低月供</strong>：适合觉得当前月供压力大，想通过一次性还款来减压的人群。</li>
+                            <li>• <strong>固定年冲</strong>：适合每年有固定结余，希望通过定期还款加速减债的人群。</li>
                         </ul>
                      </div>
 
@@ -1160,13 +1161,19 @@ export const App: React.FC = () => {
 
                                  <div className="bg-gray-100 p-1 rounded-lg flex mb-4">
                                      <button 
-                                        onClick={() => setSmartParams({...smartParams, annualStrategy: 'shorten'})} 
+                                        onClick={() => {
+                                            setSmartParams({...smartParams, annualStrategy: 'shorten'});
+                                            setSmartResult((prev: any) => ({ ...prev, annual: undefined }));
+                                        }} 
                                         className={`flex-1 py-1.5 rounded-md text-xs font-bold transition-all ${smartParams.annualStrategy === 'shorten' ? 'bg-white shadow text-blue-600' : 'text-gray-400'}`}
                                      >
                                         缩短年限
                                      </button>
                                      <button 
-                                        onClick={() => setSmartParams({...smartParams, annualStrategy: 'reduce'})} 
+                                        onClick={() => {
+                                            setSmartParams({...smartParams, annualStrategy: 'reduce'});
+                                            setSmartResult((prev: any) => ({ ...prev, annual: undefined }));
+                                        }} 
                                         className={`flex-1 py-1.5 rounded-md text-xs font-bold transition-all ${smartParams.annualStrategy === 'reduce' ? 'bg-white shadow text-blue-600' : 'text-gray-400'}`}
                                      >
                                         降低月供
@@ -1188,118 +1195,135 @@ export const App: React.FC = () => {
                                     </div>
                                     <div className="bg-slate-50 rounded-xl p-3">
                                         <label className="text-xs font-bold text-slate-500 block mb-1">还款月份</label>
-                                        <div className="flex items-center gap-1">
+                                        <div className="flex items-center justify-between gap-1 h-[28px]">
                                             <select 
                                                 value={smartParams.annualMonth}
                                                 onChange={(e) => setSmartParams({...smartParams, annualMonth: Number(e.target.value)})}
-                                                className="w-full bg-transparent font-bold text-blue-600 outline-none text-lg appearance-none" 
+                                                className="w-full bg-transparent font-bold text-blue-600 outline-none appearance-none"
                                             >
-                                                {[...Array(12)].map((_, i) => (
-                                                    <option key={i+1} value={i+1}>{i+1}月</option>
+                                                {Array.from({length: 12}, (_, i) => i + 1).map(m => (
+                                                    <option key={m} value={m}>{m}月</option>
                                                 ))}
                                             </select>
-                                            <ChevronRight size={14} className="text-slate-400"/>
+                                            <ChevronRight size={16} className="text-slate-400 pointer-events-none"/>
                                         </div>
                                     </div>
                                  </div>
-
-                                 <button 
-                                    onClick={handleSmartAnnual}
-                                    className="w-full mt-4 bg-white border border-blue-200 text-blue-600 py-2.5 rounded-xl font-bold text-sm hover:bg-blue-50 transition-colors"
-                                 >
+                                 
+                                 <button onClick={handleSmartAnnual} className="w-full mt-4 bg-white border border-blue-200 text-blue-600 py-2.5 rounded-xl font-bold text-sm hover:bg-blue-50 transition-colors">
                                     开始计算
                                  </button>
                              </div>
                              
                              {smartResult.annual && (
-                                 <div className="bg-blue-50/50 p-5 animate-fade-in">
-                                     {/* Top Section: Highlight Savings */}
-                                     <div className="mb-5 text-center">
-                                        <div className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-1">累计共节省利息</div>
+                                 <div className="bg-blue-50/50 p-5 animate-fade-in space-y-6">
+                                     <div className="text-center">
+                                        <div className="text-xs text-slate-500 mb-1">累计共节省利息</div>
                                         <div className="text-3xl font-black text-emerald-500">
                                             ¥{(smartResult.annual.savedInterest / 10000).toFixed(2)}万
                                         </div>
                                      </div>
 
-                                     {/* Detailed Grid */}
-                                     <div className="bg-white rounded-xl shadow-sm border border-blue-100 p-4 grid grid-cols-2 gap-x-6 gap-y-4">
-                                        {/* Loan Amount */}
-                                        <div className="col-span-2 flex justify-between items-center border-b border-gray-100 pb-2 mb-2">
-                                            <span className="text-xs text-gray-400 font-medium">原贷款额</span>
-                                            <span className="text-sm font-bold text-slate-700">¥{smartParams.principal}万</span>
+                                     <div className="bg-white rounded-xl p-4 border border-blue-100 shadow-sm space-y-4">
+                                        <div className="flex justify-between items-center border-b border-gray-50 pb-2">
+                                            <span className="text-xs text-gray-400">原贷款额</span>
+                                            <span className="text-sm font-bold text-gray-700">¥{(smartParams.principal).toFixed(0)}万</span>
                                         </div>
 
-                                        {/* Total Interest Comparison */}
-                                        <div className="space-y-1">
-                                            <div className="text-[10px] text-gray-400 uppercase">总利息变化</div>
-                                            <div className="flex items-center gap-1 text-xs text-gray-400 line-through">
-                                                原 ¥{(smartResult.annual.originalInterest / 10000).toFixed(2)}万
-                                            </div>
-                                            <div className="text-sm font-bold text-emerald-600">
-                                                现 ¥{((smartResult.annual.originalInterest - smartResult.annual.savedInterest) / 10000).toFixed(2)}万
-                                            </div>
-                                        </div>
-
-                                        {/* Duration Comparison */}
-                                        <div className="space-y-1 text-right">
-                                            <div className="text-[10px] text-gray-400 uppercase">
-                                                {smartResult.annual.strategy === 'shorten' ? '还款时长变化' : '还款时长'}
-                                            </div>
-                                            <div className={`flex items-center justify-end gap-1 text-xs text-gray-400 ${smartResult.annual.strategy === 'shorten' ? 'line-through' : ''}`}>
-                                                原 {smartParams.years}年
-                                            </div>
-                                            <div className="text-sm font-bold text-indigo-600">
-                                                {smartResult.annual.strategy === 'shorten' ? (
-                                                    `现 ${smartResult.annual.newYears.toFixed(1)}年`
-                                                ) : (
-                                                    '保持不变'
-                                                )}
-                                            </div>
-                                        </div>
-
-                                        {/* Total Extra Paid */}
-                                        <div className="col-span-2 mt-2 bg-blue-50 rounded-lg p-3 flex items-center justify-between">
-                                            <div className="flex items-center gap-2">
-                                                <PiggyBank size={16} className="text-blue-500" />
-                                                <div className="flex flex-col">
-                                                    <span className="text-xs font-bold text-slate-600">累计年冲投入</span>
-                                                    <span className="text-[10px] text-blue-400">本金额外支出</span>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <div className="text-[10px] text-gray-400 mb-1">总利息变化</div>
+                                                <div className="text-xs text-gray-400 line-through">原 ¥{(smartResult.annual.originalInterest / 10000).toFixed(2)}万</div>
+                                                <div className="text-sm font-bold text-emerald-600">
+                                                    现 ¥{((smartResult.annual.originalInterest - smartResult.annual.savedInterest) / 10000).toFixed(2)}万
                                                 </div>
                                             </div>
-                                            <div className="text-base font-black text-blue-600">
-                                                ¥{(smartResult.annual.totalPrepaymentAmount / 10000).toFixed(2)}万
+                                            <div className="text-right">
+                                                 <div className="text-[10px] text-gray-400 mb-1">还款时长</div>
+                                                 <div className="text-xs text-gray-400">原 {smartParams.years}年</div>
+                                                 <div className="text-sm font-bold text-blue-600">
+                                                    {smartParams.annualStrategy === 'shorten' ? 
+                                                        `缩短 ${(smartResult.annual.savedYears).toFixed(1)} 年` : 
+                                                        '保持不变'
+                                                    }
+                                                 </div>
                                             </div>
+                                        </div>
+
+                                        <div className="bg-blue-50 rounded-lg p-3 flex items-center justify-between">
+                                             <div className="flex items-center gap-2">
+                                                 <PiggyBank size={16} className="text-blue-500"/>
+                                                 <div>
+                                                     <div className="text-xs font-bold text-slate-700">累计年冲投入</div>
+                                                     <div className="text-[10px] text-blue-400">本金额外支出</div>
+                                                 </div>
+                                             </div>
+                                             <div className="text-sm font-black text-blue-600">
+                                                ¥{(smartResult.annual.totalPrepaymentAmount / 10000).toFixed(2)}万
+                                             </div>
                                         </div>
                                      </div>
 
-                                     {/* Summary Footer */}
-                                     <div className="mt-4 text-center text-xs text-slate-500">
-                                         {smartResult.annual.strategy === 'shorten' ? (
-                                             <span>
-                                                 相当于提前 <span className="font-bold text-indigo-600">{smartResult.annual.savedYears.toFixed(1)}年</span> 还清贷款
-                                             </span>
-                                         ) : (
-                                             <span>
-                                                 期末月供降至 <span className="font-bold text-emerald-600">¥{formatMoney(smartResult.annual.finalMonthly)}</span>
-                                             </span>
-                                         )}
-                                     </div>
+                                     {/* Reduce Payment Strategy Specific Info */}
+                                     {smartParams.annualStrategy === 'reduce' && (
+                                         <div className="text-center text-xs text-slate-500">
+                                             期末月供降至 <span className="font-bold text-emerald-600">¥{formatMoney(smartResult.annual.finalMonthly)}</span>
+                                         </div>
+                                     )}
+
+                                     {/* Smart Tip (Milestone) */}
+                                     {smartResult.annual.milestone && (
+                                        <div className="bg-amber-50 border border-amber-100 rounded-xl p-4 relative overflow-hidden">
+                                            <div className="absolute top-0 right-0 p-4 opacity-10">
+                                                <Lightbulb size={48} className="text-amber-500" />
+                                            </div>
+                                            <div className="flex items-center gap-2 mb-2">
+                                                <Lightbulb size={16} className="text-amber-500" />
+                                                <span className="font-bold text-amber-700 text-sm">策略建议</span>
+                                            </div>
+                                            <p className="text-xs text-amber-800 leading-relaxed relative z-10">
+                                                当在第 <strong className="text-amber-600">{smartResult.annual.milestone.year}</strong> 年时，您的贷款本金将降低至 <strong className="text-amber-600">{(smartResult.annual.milestone.principal / 10000).toFixed(2)}万</strong>。
+                                                <br/><br/>
+                                                此时系统已自动停止年冲计算（因为剩余本金 &lt; 年冲预算）。
+                                                您可以选择一次性还完，或者从第 {smartResult.annual.milestone.year + 1} 年开始，
+                                                {smartParams.annualStrategy === 'reduce' ? 
+                                                    `每年只需还 ${(smartResult.annual.milestone.monthly * 12).toFixed(0)} 元` : 
+                                                    `继续按原月供还款`
+                                                }，直至还清！
+                                            </p>
+                                        </div>
+                                     )}
                                  </div>
                              )}
                          </div>
+
                      </div>
                 </div>
             )}
+
+            {/* Disclaimer Footer */}
+            <div className="mt-12 py-6 text-center">
+                <div className="w-8 h-1 bg-gray-200 rounded-full mx-auto mb-4 opacity-50"></div>
+                <p className="text-[10px] text-gray-400/80 font-medium tracking-wide">
+                    免责声明
+                </p>
+                <p className="text-[10px] text-gray-400/60 mt-1 px-8 leading-normal">
+                    本工具提供的计算结果与策略建议仅供参考，<br />
+                    实际数据请以银行或公积金中心最终审核为准。
+                </p>
+            </div>
+
+            <GeminiInput onUpdate={handleAIUpdate} />
+
+            <YearSheet 
+                isOpen={yearPicker.isOpen} 
+                onClose={() => setYearPicker(prev => ({ ...prev, isOpen: false }))} 
+                value={yearPicker.value}
+                onSelect={yearPicker.onSelect}
+            />
+
         </div>
       </div>
-      <GeminiInput onUpdate={handleAIUpdate} />
-      
-      <YearSheet 
-        isOpen={yearPicker.isOpen} 
-        onClose={() => setYearPicker(prev => ({...prev, isOpen: false}))} 
-        value={yearPicker.value}
-        onSelect={yearPicker.onSelect}
-      />
     </div>
   );
 };

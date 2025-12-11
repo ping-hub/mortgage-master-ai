@@ -95,4 +95,11 @@ export interface SmartResult {
   finalMonthly?: number;
   strategy?: 'shorten' | 'reduce';
   totalPrepaymentAmount?: number; // Total amount paid via annual prepayments
+  
+  // Milestone for low principal advice
+  milestone?: {
+      year: number;
+      principal: number; // Yuan
+      monthly: number;   // Yuan
+  };
 }

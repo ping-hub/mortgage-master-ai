@@ -1,4 +1,5 @@
 
+
 import { LoanType, LoanParams, CalculationResult, MonthlyData, PaymentMethod, FullComparison, PrepaymentResult, ExistingLoanState, ExistingLoanPart } from '../types';
 
 // --- Base Calculators ---
@@ -460,6 +461,8 @@ export const calculateSmartAnnualPrepayment = (
   // For 'shorten', it stays constant.
   let currentPayment = originalPayment;
   let finalMonthPayment = originalPayment;
+  
+  let milestone = null;
 
   // Simulation loop
   // Limit to prevent infinite loops, but allow for standard 30y+
@@ -485,26 +488,36 @@ export const calculateSmartAnnualPrepayment = (
     // Check Annual Prepayment
     const monthInYear = (currentMonth - 1) % 12 + 1;
     if (monthInYear === prepayMonth && balance > 0) {
-        const actualPrepay = Math.min(balance, annualPrepay);
-        balance -= actualPrepay;
-        totalAnnualPrepay += actualPrepay;
+        // STRICT LOGIC: Only pay if we can pay the FULL annual amount.
+        // This ensures the "Total Annual Prepayment" is a clean multiple.
+        // If remaining balance < annualPrepay, we STOP the auto-payment logic and set a milestone.
+        if (balance >= annualPrepay) {
+            balance -= annualPrepay;
+            totalAnnualPrepay += annualPrepay;
 
-        if (strategy === 'reduce' && balance > 0) {
-            // RE-CALCULATE Monthly Payment for the REMAINING term
-            // Remaining months = totalMonths - currentMonth
-            const remainingMonths = Math.max(1, totalMonths - currentMonth);
-            // Re-calc PMT logic:
-            // PMT = P * r * (1+r)^n / ((1+r)^n - 1)
-            const factor = Math.pow(1 + monthlyRate, remainingMonths);
-            currentPayment = (balance * monthlyRate * factor) / (factor - 1);
+            if (strategy === 'reduce' && balance > 0) {
+                // RE-CALCULATE Monthly Payment for the REMAINING term
+                const remainingMonths = Math.max(1, totalMonths - currentMonth);
+                const factor = Math.pow(1 + monthlyRate, remainingMonths);
+                currentPayment = (balance * monthlyRate * factor) / (factor - 1);
+            }
+        } else {
+             // Balance is less than annual prepay amount.
+             // We hit the "Tipping Point". Stop auto-payment.
+             if (!milestone && balance > 1000) { // Check > 1000 to avoid trivial dust
+                 milestone = {
+                     year: Math.ceil(currentMonth / 12),
+                     principal: balance,
+                     monthly: currentPayment
+                 };
+             }
         }
     }
     
-    // Safety break if logic forces balance < 0
+    // Safety break
     if (balance <= 0.1) break;
   }
   
-  // Capture the final payment amount (for 'reduce' display)
   finalMonthPayment = currentPayment;
 
   return {
@@ -514,6 +527,7 @@ export const calculateSmartAnnualPrepayment = (
     originalInterest: originalInterest,
     finalMonthly: finalMonthPayment,
     strategy: strategy,
-    totalPrepaymentAmount: totalAnnualPrepay
+    totalPrepaymentAmount: totalAnnualPrepay,
+    milestone: milestone
   };
 };
