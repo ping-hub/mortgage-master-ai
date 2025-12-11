@@ -35,8 +35,24 @@ const InputCell = ({ label, value, onChange, unit, type = "number", step, placeh
     }, [value, localValue]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setLocalValue(e.target.value);
-        onChange(e);
+        let raw = e.target.value;
+        
+        // UX Fix: Prevent "05", "050" etc. Strip leading zeros unless it's "0." or just "0"
+        if (raw.length > 1 && raw.startsWith('0') && raw[1] !== '.') {
+            raw = raw.replace(/^0+/, '');
+            if (raw === '') raw = '0';
+        }
+
+        setLocalValue(raw);
+        
+        // Pass corrected value to parent
+        onChange({
+            ...e,
+            target: {
+                ...e.target,
+                value: raw
+            }
+        });
     };
 
     return (
