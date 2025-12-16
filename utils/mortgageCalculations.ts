@@ -348,28 +348,60 @@ export const calculateMethodChange = (
 
 // --- Smart Strategy Logic ---
 
-// 1. Target Years -> How much extra monthly?
+// 1. Target Years -> How much LUMP SUM needed? (Keeping monthly payment roughly same)
 export const calculateSmartTargetYears = (
     principalWan: number, 
     rate: number, 
-    currentYears: number, 
-    targetYears: number
+    currentYears: number, // Remaining Years 
+    targetYears: number   // Target Remaining Years
 ) => {
     const principal = principalWan * 10000;
     const currentMonths = currentYears * 12;
     const targetMonths = targetYears * 12;
+    const monthlyRate = rate / 100 / 12;
 
-    const oldSchedule = calculateEPI(principal, rate, currentMonths);
-    const newSchedule = calculateEPI(principal, rate, targetMonths);
+    // 1. Calculate Current Monthly Payment (Reference)
+    // Assuming EPI for generic estimation
+    const currentSchedule = calculateEPI(principal, rate, currentMonths);
+    const currentMonthly = currentSchedule.firstMonthPayment;
+
+    if (targetMonths >= currentMonths) {
+         return {
+            lumpSum: 0,
+            newMonthly: currentMonthly, 
+            oldMonthly: currentMonthly,
+            savedInterest: 0,
+            originalInterest: currentSchedule.totalInterest
+        };
+    }
+
+    // 2. Calculate Max Principal supportable by currentMonthly over targetMonths
+    // P = M * ( (1+r)^n - 1 ) / ( r * (1+r)^n )
+    // Note: If monthlyRate is 0
+    let supportablePrincipal = 0;
+    if (monthlyRate === 0) {
+        supportablePrincipal = currentMonthly * targetMonths;
+    } else {
+        const factor = (Math.pow(1 + monthlyRate, targetMonths) - 1) / (monthlyRate * Math.pow(1 + monthlyRate, targetMonths));
+        supportablePrincipal = currentMonthly * factor;
+    }
+
+    const lumpSum = Math.max(0, principal - supportablePrincipal);
+    const newPrincipal = Math.max(0, principal - lumpSum);
+
+    // Verify
+    const newSchedule = calculateEPI(newPrincipal, rate, targetMonths);
 
     return {
-        extraMonthly: newSchedule.firstMonthPayment - oldSchedule.firstMonthPayment,
-        savedInterest: oldSchedule.totalInterest - newSchedule.totalInterest,
-        originalInterest: oldSchedule.totalInterest
+        lumpSum: lumpSum,
+        newMonthly: newSchedule.firstMonthPayment, 
+        oldMonthly: currentMonthly,
+        savedInterest: currentSchedule.totalInterest - newSchedule.totalInterest,
+        originalInterest: currentSchedule.totalInterest
     };
 };
 
-// 2. Max Interest -> How much extra monthly (Implies shortening term until interest < max)
+// 2. Max Interest -> How much LUMP SUM needed? (Shortening term)
 export const calculateSmartMaxInterest = (
     principalWan: number,
     rate: number,
@@ -380,33 +412,81 @@ export const calculateSmartMaxInterest = (
     const maxInterest = maxInterestWan * 10000;
     const currentMonths = currentYears * 12;
 
-    const minSched = calculateEPI(principal, rate, 1);
-    if (minSched.totalInterest > maxInterest) return null; // Impossible
+    const currentSchedule = calculateEPI(principal, rate, currentMonths);
+    const currentMonthly = currentSchedule.firstMonthPayment;
 
-    let low = 1;
-    let high = currentMonths;
-    let bestMonths = currentMonths;
+    if (currentSchedule.totalInterest <= maxInterest) {
+        return {
+            lumpSum: 0,
+            newYears: currentYears,
+            savedInterest: 0,
+            originalInterest: currentSchedule.totalInterest,
+            newMonthly: currentMonthly,
+            months: currentMonths
+        };
+    }
 
-    while (low <= high) {
-        const mid = Math.floor((low + high) / 2);
-        const sched = calculateEPI(principal, rate, mid);
-        if (sched.totalInterest <= maxInterest) {
-            bestMonths = mid;
-            low = mid + 1;
+    // Binary Search for Lump Sum to Prepay
+    // We assume the user wants to reduce interest by PREPAYING and SHORTENING TERM (Action: Shorten)
+    // Because just prepaying and reducing monthly payment (Action: Reduce) saves less interest.
+    
+    let low = 0;
+    let high = principal;
+    let bestLumpSum = principal;
+    let bestSchedule: CalculationResult | null = null;
+    let bestMonths = 0;
+
+    // Precision: 100 RMB
+    let iterations = 0;
+    while (high - low > 100 && iterations < 50) {
+        iterations++;
+        const mid = (low + high) / 2;
+        const remainingPrincipal = principal - mid;
+
+        // Action: Shorten Term (Keep Monthly Payment ~ currentMonthly)
+        const monthlyRate = rate / 100 / 12;
+        let newMonths = 0;
+        let tempSchedule;
+
+        if (monthlyRate > 0) {
+             if (remainingPrincipal * monthlyRate >= currentMonthly) {
+                 // Interest exceeds payment, impossible to shorten with same payment, must prepay more
+                 low = mid; 
+                 continue;
+             }
+             const n = Math.log(currentMonthly / (currentMonthly - remainingPrincipal * monthlyRate)) / Math.log(1 + monthlyRate);
+             newMonths = Math.max(1, Math.ceil(n));
+             tempSchedule = calculateEPI(remainingPrincipal, rate, newMonths);
         } else {
-             high = mid - 1;
+             newMonths = Math.max(1, Math.ceil(remainingPrincipal / currentMonthly));
+             tempSchedule = calculateEPI(remainingPrincipal, rate, newMonths);
+        }
+
+        if (tempSchedule.totalInterest <= maxInterest) {
+            bestLumpSum = mid;
+            bestSchedule = tempSchedule;
+            bestMonths = newMonths;
+            high = mid; // Try to pay less if possible
+        } else {
+            low = mid; // Need to pay more
         }
     }
     
-    const finalSched = calculateEPI(principal, rate, bestMonths);
-    const originalSched = calculateEPI(principal, rate, currentMonths);
+    // Safety
+    if (!bestSchedule) {
+        bestLumpSum = principal;
+        bestSchedule = createEmptyResult();
+        bestMonths = 0;
+    }
 
     return {
-        newMonthly: finalSched.firstMonthPayment,
-        extraMonthly: finalSched.firstMonthPayment - originalSched.firstMonthPayment,
+        lumpSum: bestLumpSum,
+        newYears: bestMonths / 12, // Float
         months: bestMonths,
-        actualInterest: finalSched.totalInterest,
-        originalInterest: originalSched.totalInterest
+        savedInterest: currentSchedule.totalInterest - bestSchedule.totalInterest,
+        originalInterest: currentSchedule.totalInterest,
+        newMonthly: bestSchedule.firstMonthPayment || 0,
+        actualInterest: bestSchedule.totalInterest
     };
 };
 
@@ -421,7 +501,13 @@ export const calculateSmartTargetPayment = (
     const months = years * 12;
     const r = rate / 100 / 12;
     
-    const factor = (Math.pow(1 + r, months) - 1) / (r * Math.pow(1 + r, months));
+    let factor = 0;
+    if (r === 0) {
+        factor = months;
+    } else {
+        factor = (Math.pow(1 + r, months) - 1) / (r * Math.pow(1 + r, months));
+    }
+    
     const newPrincipal = targetPayment * factor;
     
     const lumpSum = Math.max(0, principal - newPrincipal);
@@ -531,3 +617,4 @@ export const calculateSmartAnnualPrepayment = (
     milestone: milestone
   };
 };
+

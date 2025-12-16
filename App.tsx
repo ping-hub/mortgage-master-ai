@@ -1,5 +1,5 @@
 import React, { useState, useRef, useMemo, useEffect } from 'react';
-import { Calculator, PieChart, Banknote, ArrowRight, TrendingDown, Clock, Coins, ChevronRight, CheckCircle2, Info, Sparkles, Calendar, ArrowRightCircle, RefreshCw, X, PiggyBank, Lightbulb } from 'lucide-react';
+import { Calculator, PieChart, Banknote, ArrowRight, TrendingDown, Clock, Coins, ChevronRight, CheckCircle2, Info, Sparkles, Calendar, ArrowRightCircle, RefreshCw, X, PiggyBank, Lightbulb, Github, LayoutGrid, ShieldCheck } from 'lucide-react';
 import { LoanParams, LoanType, FullComparison, PaymentMethod, ExistingLoanState } from './types';
 import { 
     calculateMortgage, 
@@ -307,7 +307,7 @@ const BareInput = ({ value, onChange, className, readOnly, onClick, onBlur, ...p
 };
 
 export const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'new' | 'existing' | 'smart'>('new');
+  const [activeTab, setActiveTab] = useState<'new' | 'existing' | 'smart' | 'about'>('new');
   
   // Tab 1 State
   const [params, setParams] = useState<LoanParams>({
@@ -503,12 +503,20 @@ export const App: React.FC = () => {
         
         {/* Compact Header */}
         <div className="bg-white pb-6 pt-8 px-6 rounded-b-[32px] shadow-sm mb-6">
-            <h1 className="text-2xl font-black text-slate-900 mb-1 flex items-center gap-2">
-                <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white">
-                    <Calculator size={18} />
-                </div>
-                房贷智策
-            </h1>
+            <div className="flex justify-between items-start mb-1">
+                <h1 className="text-2xl font-black text-slate-900 flex items-center gap-2">
+                    <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white">
+                        <Calculator size={18} />
+                    </div>
+                    房贷智策
+                </h1>
+                <button 
+                    onClick={() => setActiveTab('about')}
+                    className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-full transition-colors"
+                >
+                    <Info size={24} />
+                </button>
+            </div>
             <p className="text-gray-400 text-xs font-medium pl-10">AI智能规划 · 提前还款 · 省息策略</p>
             
             {/* Segmented Control Tabs */}
@@ -849,8 +857,8 @@ export const App: React.FC = () => {
                         </div>
                         <p className="mb-2 opacity-90">不确定该怎么还款最划算？只需输入目标（如“想在20年内还清”或“月供想降到5000”），系统自动为您反推最佳方案。</p>
                         <ul className="space-y-1.5 opacity-90">
-                            <li>• <strong>缩短年限</strong>：适合想早点还清、减少总利息的人群。</li>
-                            <li>• <strong>利息控制</strong>：适合对总利息支出有严格预算的人群。</li>
+                            <li>• <strong>缩短年限</strong>：计算需要提前还多少钱，才能将剩余年限缩短至目标年限（月供不变）。</li>
+                            <li>• <strong>利息控制</strong>：计算需要提前还多少钱，才能将剩余利息控制在预算内。</li>
                             <li>• <strong>降低月供</strong>：适合觉得当前月供压力大，想通过一次性还款来减压的人群。</li>
                             <li>• <strong>固定年冲</strong>：适合每年有固定结余，希望通过定期还款加速减债的人群。</li>
                         </ul>
@@ -865,7 +873,7 @@ export const App: React.FC = () => {
                             <div className="flex items-center justify-between mb-6 opacity-90">
                                 <div className="flex items-center gap-2">
                                     <PieChart size={20} />
-                                    <span className="font-bold text-base tracking-wide">基础贷款数据</span>
+                                    <span className="font-bold text-base tracking-wide">已有贷款数据</span>
                                 </div>
                                 <div className="text-xs bg-white/20 px-2 py-1 rounded-lg">实时参考</div>
                             </div>
@@ -873,7 +881,7 @@ export const App: React.FC = () => {
                             {/* Input Fields */}
                             <div className="space-y-5">
                                 <div className="flex justify-between items-center border-b border-white/10 pb-2">
-                                    <span className="text-sm font-medium text-white/80">贷款本金</span>
+                                    <span className="text-sm font-medium text-white/80">剩余本金</span>
                                     <div className="flex items-baseline gap-1">
                                        <BareInput 
                                            inputMode="decimal"
@@ -898,7 +906,7 @@ export const App: React.FC = () => {
                                     </div>
                                 </div>
                                 <div className="flex justify-between items-center">
-                                    <span className="text-sm font-medium text-white/80">贷款年限</span>
+                                    <span className="text-sm font-medium text-white/80">剩余年限</span>
                                     <div className="flex items-baseline gap-1 items-center cursor-pointer" onClick={() => openYearPicker(smartParams.years, (y) => setSmartParams({...smartParams, years: y}))}>
                                        <BareInput 
                                            readOnly={true}
@@ -918,7 +926,7 @@ export const App: React.FC = () => {
                                     <div className="text-lg font-bold">¥{formatMoney(smartBaseData.monthly)}</div>
                                 </div>
                                 <div className="text-right">
-                                    <div className="text-xs text-white/60 mb-1">当前总利息</div>
+                                    <div className="text-xs text-white/60 mb-1">剩余总利息</div>
                                     <div className="text-lg font-bold">¥{(smartBaseData.totalInterest / 10000).toFixed(2)}万</div>
                                 </div>
                             </div>
@@ -961,6 +969,14 @@ export const App: React.FC = () => {
                              
                              {smartResult.years && (
                                  <div className="bg-indigo-50/50 p-5 animate-fade-in space-y-4">
+                                     {/* Key Metrics */}
+                                     <div className="bg-white rounded-lg p-3 border border-indigo-100 shadow-sm text-center">
+                                         <div className="text-xs font-bold text-indigo-500 uppercase tracking-wider mb-1">需一次性提前还款</div>
+                                         <div className="font-black text-rose-500 text-xl">
+                                            ¥{(smartResult.years.lumpSum / 10000).toFixed(2)}万
+                                         </div>
+                                     </div>
+
                                      {/* Interest Comparison */}
                                      <div className="grid grid-cols-2 gap-4 text-xs text-slate-500 border-b border-indigo-100 pb-3">
                                          <div>
@@ -968,37 +984,19 @@ export const App: React.FC = () => {
                                              <div className="font-bold text-slate-700">¥{(smartResult.years.originalInterest / 10000).toFixed(2)}万</div>
                                          </div>
                                          <div className="text-right">
-                                             <div className="mb-1">新总利息</div>
+                                             <div className="mb-1">利息节省</div>
                                              <div className="font-bold text-emerald-600 flex items-center justify-end gap-1">
-                                                ¥{((smartResult.years.originalInterest - smartResult.years.savedInterest) / 10000).toFixed(2)}万
+                                                ¥{(smartResult.years.savedInterest / 10000).toFixed(2)}万
                                                 <TrendingDown size={12}/>
                                              </div>
                                          </div>
                                      </div>
 
-                                     {/* Monthly Payment Comparison */}
+                                     {/* Monthly Payment Note */}
                                      <div className="flex justify-between items-center text-sm">
                                          <span className="text-slate-500">月供变化</span>
                                          <div className="flex items-center gap-2 font-bold text-slate-700">
-                                             ¥{formatMoney(smartBaseData.monthly)}
-                                             <ArrowRight size={14} className="text-indigo-300"/>
-                                             <span className="text-indigo-600">¥{formatMoney(smartBaseData.monthly + smartResult.years.extraMonthly)}</span>
-                                         </div>
-                                     </div>
-                                     
-                                     {/* Key Metrics */}
-                                     <div className="bg-white rounded-lg p-3 border border-indigo-100 shadow-sm">
-                                         <div className="flex justify-between items-center mb-2">
-                                             <span className="text-xs font-bold text-indigo-500 uppercase tracking-wider">投入</span>
-                                             <span className="font-bold text-rose-500">
-                                                +¥{formatMoney(smartResult.years.extraMonthly)}<span className="text-xs text-rose-300 font-normal">/月</span>
-                                             </span>
-                                         </div>
-                                         <div className="flex justify-between items-center">
-                                             <span className="text-xs font-bold text-emerald-500 uppercase tracking-wider">回报</span>
-                                             <span className="font-bold text-emerald-600">
-                                                省息 ¥{(smartResult.years.savedInterest / 10000).toFixed(2)}万
-                                             </span>
+                                             <span className="text-emerald-600">月供基本不变</span>
                                          </div>
                                      </div>
                                  </div>
@@ -1039,46 +1037,35 @@ export const App: React.FC = () => {
                              
                              {smartResult.interest && (
                                  <div className="bg-rose-50/50 p-5 animate-fade-in space-y-4">
+                                     {/* Key Metrics */}
+                                     <div className="bg-white rounded-lg p-3 border border-rose-100 shadow-sm text-center">
+                                         <div className="text-xs font-bold text-rose-500 uppercase tracking-wider mb-1">需一次性提前还款</div>
+                                         <div className="font-black text-rose-500 text-xl">
+                                            ¥{(smartResult.interest.lumpSum / 10000).toFixed(2)}万
+                                         </div>
+                                     </div>
+
                                      {/* Interest Comparison */}
                                      <div className="grid grid-cols-2 gap-4 text-xs text-slate-500 border-b border-rose-100 pb-3">
                                          <div>
-                                             <div className="mb-1">原总利息</div>
-                                             <div className="font-bold text-slate-700">¥{(smartResult.interest.originalInterest / 10000).toFixed(2)}万</div>
+                                             <div className="mb-1">目标利息</div>
+                                             <div className="font-bold text-slate-700">¥{(maxInterestInput).toFixed(2)}万</div>
                                          </div>
                                          <div className="text-right">
-                                             <div className="mb-1">新总利息</div>
+                                             <div className="mb-1">实际控制</div>
                                              <div className="font-bold text-emerald-600 flex items-center justify-end gap-1">
                                                 ¥{(smartResult.interest.actualInterest / 10000).toFixed(2)}万
-                                                <TrendingDown size={12}/>
                                              </div>
                                          </div>
                                      </div>
 
                                       {/* Years Comparison */}
                                       <div className="flex justify-between items-center text-sm">
-                                         <span className="text-slate-500">还款年限</span>
+                                         <span className="text-slate-500">年限缩短至</span>
                                          <div className="flex items-center gap-2 font-bold text-slate-700">
-                                             {smartParams.years}年 
-                                             <ArrowRight size={14} className="text-rose-300"/>
-                                             <span className="text-emerald-600">{Math.ceil(smartResult.interest.months/12)}年</span>
+                                             <span className="text-emerald-600">{(smartResult.interest.months/12).toFixed(1)} 年</span>
                                          </div>
                                       </div>
-                                      
-                                     {/* Key Metrics */}
-                                     <div className="bg-white rounded-lg p-3 border border-rose-100 shadow-sm">
-                                         <div className="flex justify-between items-center mb-2">
-                                             <span className="text-xs font-bold text-rose-500 uppercase tracking-wider">新月供</span>
-                                             <span className="font-bold text-rose-500">
-                                                ¥{formatMoney(smartResult.interest.newMonthly)}
-                                             </span>
-                                         </div>
-                                         <div className="flex justify-between items-center">
-                                             <span className="text-xs font-bold text-emerald-500 uppercase tracking-wider">缩短</span>
-                                             <span className="font-bold text-emerald-600">
-                                                 {(smartParams.years - smartResult.interest.months/12).toFixed(1)} 年
-                                             </span>
-                                         </div>
-                                     </div>
                                  </div>
                              )}
                          </div>
@@ -1117,8 +1104,19 @@ export const App: React.FC = () => {
                              
                              {smartResult.payment && (
                                  <div className="bg-emerald-50/50 p-5 animate-fade-in space-y-4">
+                                     {/* Key Metrics */}
+                                    <div className="bg-white rounded-lg p-3 border border-emerald-100 shadow-sm text-center">
+                                         <div className="text-xs font-bold text-slate-400 mb-1">需一次性提前还款</div>
+                                         <div className="font-black text-rose-500 text-xl mb-1">
+                                            ¥{(smartResult.payment.lumpSum / 10000).toFixed(2)}万
+                                         </div>
+                                         <div className="text-[10px] text-emerald-600 font-bold bg-emerald-50 inline-block px-2 py-1 rounded">
+                                             一次性投入，月供永久降低
+                                         </div>
+                                    </div>
+                                    
                                      {/* Monthly Payment Comparison */}
-                                     <div className="grid grid-cols-2 gap-4 text-xs text-slate-500 border-b border-emerald-100 pb-3">
+                                     <div className="grid grid-cols-2 gap-4 text-xs text-slate-500 border-t border-emerald-100 pt-3">
                                         <div>
                                             <div className="mb-1">原月供</div>
                                             <div className="font-bold text-slate-700">¥{formatMoney(smartBaseData.monthly)}</div>
@@ -1130,17 +1128,6 @@ export const App: React.FC = () => {
                                                 <TrendingDown size={12}/>
                                             </div>
                                         </div>
-                                    </div>
-
-                                     {/* Key Metrics */}
-                                    <div className="bg-white rounded-lg p-3 border border-emerald-100 shadow-sm text-center">
-                                         <div className="text-xs font-bold text-slate-400 mb-1">需一次性还本</div>
-                                         <div className="font-black text-rose-500 text-xl mb-1">
-                                            ¥{(smartResult.payment.lumpSum / 10000).toFixed(2)}万
-                                         </div>
-                                         <div className="text-[10px] text-emerald-600 font-bold bg-emerald-50 inline-block px-2 py-1 rounded">
-                                             一次性投入，月供永久降低
-                                         </div>
                                     </div>
                                  </div>
                              )}
@@ -1298,6 +1285,86 @@ export const App: React.FC = () => {
                          </div>
 
                      </div>
+                </div>
+            )}
+
+            {/* TAB 4: ABOUT US */}
+            {activeTab === 'about' && (
+                <div className="animate-fade-in space-y-6">
+                   <div className="bg-white rounded-3xl p-8 shadow-sm text-center">
+                       <div className="w-20 h-20 bg-indigo-600 rounded-2xl flex items-center justify-center text-white mx-auto mb-6 shadow-xl shadow-indigo-200">
+                           <Calculator size={40} />
+                       </div>
+                       <h2 className="text-2xl font-black text-slate-800 mb-2">房贷智策</h2>
+                       <p className="text-sm text-gray-500 font-medium mb-8">v2.1.0 · 全网最强房贷计算器</p>
+                       
+                       <div className="text-left space-y-6">
+                           <div className="space-y-2">
+                               <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                                   <div className="w-1 h-4 bg-indigo-600 rounded-full"></div>
+                                   产品介绍
+                               </h3>
+                               <p className="text-sm text-gray-600 leading-relaxed text-justify">
+                                   房贷智策是一款专为购房者打造的智能财务规划工具。不同于传统计算器，我们不仅提供精准的商业、公积金及组合贷计算，更首创了“智能反向推算”引擎，帮助已购房用户制定最优的提前还款省息策略。
+                               </p>
+                           </div>
+
+                           <div className="space-y-2">
+                               <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                                   <div className="w-1 h-4 bg-purple-600 rounded-full"></div>
+                                   核心功能
+                               </h3>
+                               <div className="grid grid-cols-2 gap-3">
+                                   <div className="bg-slate-50 p-3 rounded-xl">
+                                       <div className="text-indigo-600 mb-2"><LayoutGrid size={20}/></div>
+                                       <div className="font-bold text-slate-700 text-xs">全能计算</div>
+                                       <div className="text-[10px] text-gray-400">支持LPR/公积金/组合贷</div>
+                                   </div>
+                                   <div className="bg-slate-50 p-3 rounded-xl">
+                                       <div className="text-rose-500 mb-2"><Banknote size={20}/></div>
+                                       <div className="font-bold text-slate-700 text-xs">提前还款</div>
+                                       <div className="text-[10px] text-gray-400">一键对比省息/减负</div>
+                                   </div>
+                                   <div className="bg-slate-50 p-3 rounded-xl">
+                                       <div className="text-purple-600 mb-2"><Sparkles size={20}/></div>
+                                       <div className="font-bold text-slate-700 text-xs">智能反推</div>
+                                       <div className="text-[10px] text-gray-400">指定目标反推还款额</div>
+                                   </div>
+                                   <div className="bg-slate-50 p-3 rounded-xl">
+                                       <div className="text-blue-500 mb-2"><Calendar size={20}/></div>
+                                       <div className="font-bold text-slate-700 text-xs">年冲策略</div>
+                                       <div className="text-[10px] text-gray-400">固定结余加速减债</div>
+                                   </div>
+                               </div>
+                           </div>
+                           
+                           <div className="space-y-2">
+                               <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                                   <div className="w-1 h-4 bg-emerald-500 rounded-full"></div>
+                                   安全承诺
+                               </h3>
+                               <div className="flex items-start gap-3 bg-emerald-50 p-3 rounded-xl">
+                                    <ShieldCheck className="text-emerald-600 shrink-0" size={20}/>
+                                    <p className="text-xs text-emerald-800 leading-relaxed">
+                                        我们承诺：本工具所有计算均在本地完成（AI功能除外），不保存、不上传您的任何财务数据，请放心使用。
+                                    </p>
+                               </div>
+                           </div>
+                       </div>
+                       
+                       <div className="mt-8 pt-6 border-t border-gray-100">
+                           <a 
+                               href="https://github.com/ping-hub/mortgage-master-ai" 
+                               target="_blank" 
+                               rel="noopener noreferrer"
+                               className="flex items-center justify-center gap-2 w-full text-xs text-gray-400 hover:text-indigo-600 transition-colors"
+                           >
+                               <Github size={14} />
+                               项目开源地址;
+                           </a>
+                           <p className="text-[10px] text-gray-300 mt-2">Designed with ❤️ by 房贷智策 Team</p>
+                       </div>
+                   </div>
                 </div>
             )}
 
