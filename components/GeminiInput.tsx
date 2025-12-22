@@ -13,11 +13,11 @@ export const GeminiInput: React.FC<GeminiInputProps> = ({ onUpdate }) => {
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async () => {
-    if (!prompt.trim() || !process.env.API_KEY) return;
+    if (!prompt.trim() || !process.env.VITE_API_KEY) return;
     
     setLoading(true);
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const ai = new GoogleGenAI({ apiKey: process.env.VITE_API_KEY });
       const model = 'gemini-2.5-flash';
       
       const systemPrompt = `
@@ -108,7 +108,7 @@ export const GeminiInput: React.FC<GeminiInputProps> = ({ onUpdate }) => {
                 </button>
              </div>
              
-             {!process.env.API_KEY && (
+             {!process.env.VITE_API_KEY && (
                <p className="text-red-500 text-xs mt-2 text-center">
                  Demo模式：未检测到API Key，AI功能不可用
                </p>
