@@ -18,7 +18,7 @@ export const GeminiInput: React.FC<GeminiInputProps> = ({ onUpdate }) => {
     setLoading(true);
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.VITE_API_KEY });
-      const model = 'gemini-2.5-flash';
+      const model = 'gemini-2.5-pro';
       
       const systemPrompt = `
         You are a mortgage data extractor. Extract loan details from the user's natural language input into a JSON object.
