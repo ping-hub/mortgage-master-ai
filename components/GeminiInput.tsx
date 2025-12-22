@@ -14,11 +14,11 @@ export const GeminiInput: React.FC<GeminiInputProps> = ({ onUpdate }) => {
 
   const handleSubmit = async () => {
     // 增加调试日志
-    console.log('All process.env:', process.env);
-    console.log('VITE_API_KEY:', (process.env as any)?.VITE_API_KEY);
+    console.log('All import.meta.env:', import.meta.env);
+    console.log('VITE_API_KEY:', (import.meta.env as any)?.VITE_API_KEY);
     
     // 优先使用规范定义的 API_KEY
-    const apiKey = process.env.API_KEY || (process.env as any)?.VITE_API_KEY;
+    const apiKey = import.meta.env.API_KEY || (import.meta.env as any)?.VITE_API_KEY;
     
     if (!prompt.trim() || !apiKey) return;
     
@@ -117,7 +117,7 @@ export const GeminiInput: React.FC<GeminiInputProps> = ({ onUpdate }) => {
                 </button>
              </div>
              
-             {!(process.env.API_KEY || (process.env as any)?.VITE_API_KEY) && (
+             {!(import.meta.env.API_KEY || (import.meta.env as any)?.VITE_API_KEY) && (
                <p className="text-red-500 text-xs mt-2 text-center">
                  Demo模式：未检测到有效 API Key，AI功能不可用
                </p>
