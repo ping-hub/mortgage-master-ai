@@ -617,4 +617,3 @@ export const calculateSmartAnnualPrepayment = (
     milestone: milestone
   };
 };
-
