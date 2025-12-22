@@ -13,12 +13,21 @@ export const GeminiInput: React.FC<GeminiInputProps> = ({ onUpdate }) => {
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async () => {
-    if (!prompt.trim() || !process.env.VITE_API_KEY) return;
+    // 增加调试日志
+    console.log('All process.env:', process.env);
+    console.log('VITE_API_KEY:', (process.env as any)?.VITE_API_KEY);
+    
+    // 优先使用规范定义的 API_KEY
+    const apiKey = process.env.API_KEY || (process.env as any)?.VITE_API_KEY;
+    
+    if (!prompt.trim() || !apiKey) return;
     
     setLoading(true);
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.VITE_API_KEY });
-      const model = 'gemini-2.5-pro';
+      // 使用规范要求的初始化方式
+      const ai = new GoogleGenAI({ apiKey });
+      // 使用推荐的 Gemini 3 Flash 模型进行文本解析
+      const model = 'gemini-3-flash-preview';
       
       const systemPrompt = `
         You are a mortgage data extractor. Extract loan details from the user's natural language input into a JSON object.
@@ -57,7 +66,7 @@ export const GeminiInput: React.FC<GeminiInputProps> = ({ onUpdate }) => {
       }
     } catch (e) {
       console.error("Gemini Error:", e);
-      alert("AI解析失败，请检查API Key或重试");
+      alert("AI解析失败，请检查调试控制台输出或稍后重试");
     } finally {
       setLoading(false);
     }
@@ -108,9 +117,9 @@ export const GeminiInput: React.FC<GeminiInputProps> = ({ onUpdate }) => {
                 </button>
              </div>
              
-             {!process.env.VITE_API_KEY && (
+             {!(process.env.API_KEY || (process.env as any)?.VITE_API_KEY) && (
                <p className="text-red-500 text-xs mt-2 text-center">
-                 Demo模式：未检测到API Key，AI功能不可用
+                 Demo模式：未检测到有效 API Key，AI功能不可用
                </p>
              )}
           </div>
