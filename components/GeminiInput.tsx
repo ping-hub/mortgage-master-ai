@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
-import { GoogleGenAI } from '@google/genai';
 import { Sparkles, Send, X, Loader2 } from 'lucide-react';
-import { LoanParams, LoanType } from '../types';
+import { LoanParams } from '../types';
 
 interface GeminiInputProps {
   onUpdate: (params: Partial<LoanParams>) => void;
@@ -13,57 +12,34 @@ export const GeminiInput: React.FC<GeminiInputProps> = ({ onUpdate }) => {
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async () => {
-    
-    // 优先使用规范定义的 API_KEY
-    const apiKey = import.meta.env.API_KEY || (import.meta.env as any)?.VITE_API_KEY;
-    
-    if (!prompt.trim() || !apiKey) return;
-    
+    if (!prompt.trim()) return;
+
     setLoading(true);
     try {
-      // 使用规范要求的初始化方式
-      const ai = new GoogleGenAI({ apiKey });
-      // 使用推荐的 Gemini 3 Flash 模型进行文本解析
-      const model = 'gemini-3-flash-preview';
-      
-      const systemPrompt = `
-        You are a mortgage data extractor. Extract loan details from the user's natural language input into a JSON object.
-        Match this interface:
-        {
-          type: 'commercial' | 'provident' | 'combo',
-          commercialAmount: number (in ten thousands/wan),
-          commercialRate: number (percentage),
-          commercialYears: number,
-          providentAmount: number (in ten thousands/wan),
-          providentRate: number (percentage),
-          providentYears: number
-        }
-        Defaults:
-        - If not specified, commercial rate = 3.5, provident rate = 2.6.
-        - If not specified, years = 30.
-        - If type is unclear but mentions provident fund, assume 'provident' or 'combo'.
-        - If amount is given as "100万", value is 100.
-        
-        Return ONLY the JSON.
-      `;
-
-      const response = await ai.models.generateContent({
-        model,
-        contents: `${systemPrompt}\n\nUser Input: ${prompt}`,
+      const response = await fetch('/api/gemini', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ prompt }),
       });
 
-      const text = response.text;
-      const jsonMatch = text?.match(/\{[\s\S]*\}/);
-      
-      if (jsonMatch) {
-        const data = JSON.parse(jsonMatch[0]);
-        onUpdate(data);
-        setIsOpen(false);
-        setPrompt('');
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || '请求失败');
       }
-    } catch (e) {
-      console.error("Gemini Error:", e);
-      alert("AI解析失败，请检查调试控制台输出或稍后重试");
+
+      const { data } = await response.json();
+
+      // 直接把后端解析好的数据传给父组件
+      onUpdate(data);
+
+      // 成功后关闭弹窗、清空输入
+      setIsOpen(false);
+      setPrompt('');
+    } catch (e: any) {
+      console.error("AI 调用失败:", e);
+      alert("AI 解析失败：" + e.message + "\n请检查输入或稍后重试");
     } finally {
       setLoading(false);
     }
@@ -82,43 +58,37 @@ export const GeminiInput: React.FC<GeminiInputProps> = ({ onUpdate }) => {
       {isOpen && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl w-full max-w-lg p-6 shadow-2xl animate-fade-in-up border border-purple-100">
-             <div className="flex justify-between items-center mb-4">
-                <h3 className="text-xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent flex items-center gap-2">
-                  <Sparkles size={20} className="text-purple-600" />
-                  告诉我你的贷款情况
-                </h3>
-                <button onClick={() => setIsOpen(false)} className="text-gray-400 hover:text-gray-600">
-                  <X size={24} />
-                </button>
-             </div>
-             
-             <p className="text-gray-500 mb-4 text-sm">
-                试着说："组合贷，商贷200万30年，公积金80万" 或 "150万商贷，利率3.2"
-             </p>
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent flex items-center gap-2">
+                <Sparkles size={20} className="text-purple-600" />
+                告诉我你的贷款情况
+              </h3>
+              <button onClick={() => setIsOpen(false)} className="text-gray-400 hover:text-gray-600">
+                <X size={24} />
+              </button>
+            </div>
+            
+            <p className="text-gray-500 mb-4 text-sm">
+              试着说："组合贷，商贷200万30年，公积金80万" 或 "150万商贷，利率3.2"
+            </p>
 
-             <textarea
-                value={prompt}
-                onChange={(e) => setPrompt(e.target.value)}
-                className="w-full h-32 bg-slate-50 border border-slate-200 rounded-xl p-4 focus:ring-2 focus:ring-purple-500 focus:outline-none resize-none text-gray-700"
-                placeholder="在此输入..."
-             />
+            <textarea
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+              className="w-full h-32 bg-slate-50 border border-slate-200 rounded-xl p-4 focus:ring-2 focus:ring-purple-500 focus:outline-none resize-none text-gray-700"
+              placeholder="在此输入..."
+            />
 
-             <div className="flex justify-end mt-4">
-                <button 
-                  onClick={handleSubmit}
-                  disabled={loading || !prompt}
-                  className="bg-black text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  {loading ? <Loader2 className="animate-spin" /> : <Send size={18} />}
-                  开始解析
-                </button>
-             </div>
-             
-             {!(import.meta.env.API_KEY || (import.meta.env as any)?.VITE_API_KEY) && (
-               <p className="text-red-500 text-xs mt-2 text-center">
-                 Demo模式：未检测到有效 API Key，AI功能不可用
-               </p>
-             )}
+            <div className="flex justify-end mt-4">
+              <button 
+                onClick={handleSubmit}
+                disabled={loading || !prompt.trim()}
+                className="bg-black text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {loading ? <Loader2 className="animate-spin" size={18} /> : <Send size={18} />}
+                {loading ? '解析中...' : '开始解析'}
+              </button>
+            </div>
           </div>
         </div>
       )}
