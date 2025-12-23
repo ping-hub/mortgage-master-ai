@@ -13,9 +13,6 @@ export const GeminiInput: React.FC<GeminiInputProps> = ({ onUpdate }) => {
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async () => {
-    // 增加调试日志
-    console.log('All import.meta.env:', import.meta.env);
-    console.log('VITE_API_KEY:', (import.meta.env as any)?.VITE_API_KEY);
     
     // 优先使用规范定义的 API_KEY
     const apiKey = import.meta.env.API_KEY || (import.meta.env as any)?.VITE_API_KEY;
