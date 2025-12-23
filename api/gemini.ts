@@ -15,8 +15,8 @@ export default async function handler(req: any, res: any) {
 
   try {
     const genAI = new GoogleGenerativeAI(apiKey);
-    // 使用最新的稳定模型，gemini-1.5-flash 速度快、便宜
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    // 使用最新的稳定模型
+    const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
 
     const systemPrompt = `
       You are a mortgage data extractor. Extract loan details from the user's natural language input into a JSON object.
