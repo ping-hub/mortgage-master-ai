@@ -129,10 +129,21 @@ const YearSheet = ({ isOpen, onClose, value, onSelect }: { isOpen: boolean, onCl
 };
 
 // Helper for Cell Style Input
-const InputCell = ({ label, value, onChange, unit, step, placeholder = "0", actionIcon, onAction, readOnly = false, onClick }: any) => {
-    const [localValue, _setLocalValue] = useState(value === 0 ? '' : value.toString());
+const InputCell = ({ label, value, onChange, unit, step, placeholder = "0", actionIcon, onAction, readOnly = false, onClick, useThousandSeparator = false }: any) => {
+    // Format helper: adds commas to integer part
+    const format = (val: string) => {
+        if (!useThousandSeparator) return val;
+        if (!val) return '';
+        const parts = val.split('.');
+        parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+        return parts.join('.');
+    };
+    
+    // Unformat helper: removes commas
+    const unformat = (val: string) => useThousandSeparator ? val.replace(/,/g, '') : val;
+
+    const [localValue, _setLocalValue] = useState(value === 0 ? '' : format(value.toString()));
     const localValueRef = useRef(localValue);
-    const timeoutRef = useRef<any>(null);
 
     const setLocalValue = (val: string) => {
         localValueRef.current = val;
@@ -140,7 +151,7 @@ const InputCell = ({ label, value, onChange, unit, step, placeholder = "0", acti
     };
 
     useEffect(() => {
-        const numericLocal = parseFloat(localValue);
+        const numericLocal = parseFloat(unformat(localValue));
         const numericProp = Number(value);
 
         if (isNaN(numericLocal)) {
@@ -150,51 +161,46 @@ const InputCell = ({ label, value, onChange, unit, step, placeholder = "0", acti
 
         if (numericLocal === numericProp) return;
         
-        setLocalValue(numericProp === 0 ? '' : numericProp.toString());
+        setLocalValue(numericProp === 0 ? '' : format(numericProp.toString()));
     }, [value]);
-
-    useEffect(() => {
-        return () => {
-            if (timeoutRef.current) clearTimeout(timeoutRef.current);
-        };
-    }, []);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const raw = e.target.value;
         
         if (raw === '') {
             setLocalValue('');
-            if (timeoutRef.current) clearTimeout(timeoutRef.current);
-            timeoutRef.current = setTimeout(() => {
-                onChange({ ...e, target: { ...e.target, value: '' } });
-            }, 300);
+            onChange({ ...e, target: { ...e.target, value: '' } });
             return;
         }
 
+        const cleanRaw = unformat(raw);
+
         // Professional Validation: Digits & Dot only
-        if (!/^\d*\.?\d*$/.test(raw)) return;
+        if (!/^\d*\.?\d*$/.test(cleanRaw)) return;
         
         // Safety: Prevent excessive length
-        if (raw.replace('.', '').length > 9) return;
+        if (cleanRaw.replace('.', '').length > 12) return;
 
-        let clean = raw;
+        let clean = cleanRaw;
         if (clean.length > 1 && clean.startsWith('0') && clean[1] !== '.') {
             clean = clean.replace(/^0+/, '');
             if (clean === '') clean = '0';
         }
         
-        setLocalValue(clean);
-        
-        if (timeoutRef.current) clearTimeout(timeoutRef.current);
-        timeoutRef.current = setTimeout(() => {
-             onChange({ target: { value: clean } });
-        }, 300);
+        setLocalValue(clean); // Show raw number while typing
+        onChange({ target: { value: clean } });
+    };
+
+    const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
+        if (useThousandSeparator) {
+            setLocalValue(unformat(localValue));
+        }
     };
 
     const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
-        if (timeoutRef.current) {
-            clearTimeout(timeoutRef.current);
-            onChange({ target: { value: localValueRef.current } });
+        onChange({ target: { value: unformat(localValueRef.current) } });
+        if (useThousandSeparator) {
+            setLocalValue(format(unformat(localValueRef.current)));
         }
     };
 
@@ -208,6 +214,7 @@ const InputCell = ({ label, value, onChange, unit, step, placeholder = "0", acti
                     value={readOnly ? value : localValue} 
                     readOnly={readOnly}
                     onChange={readOnly ? undefined : handleChange}
+                    onFocus={readOnly ? undefined : handleFocus}
                     onBlur={readOnly ? undefined : handleBlur}
                     className={`text-right font-bold text-slate-900 bg-transparent outline-none w-full placeholder-gray-300 focus:text-indigo-600 transition-colors text-lg ${readOnly ? 'cursor-pointer pointer-events-none' : ''}`}
                     placeholder={placeholder}
@@ -322,26 +329,29 @@ export const App: React.FC = () => {
   const [result, setResult] = useState<FullComparison | null>(null);
   const [calculating, setCalculating] = useState(false);
   const resultsRef = useRef<HTMLDivElement>(null);
+  const existingResultsRef = useRef<HTMLDivElement>(null);
 
   // Tab 2 State (Composite)
   const [existState, setExistState] = useState<ExistingLoanState>({
     type: LoanType.COMMERCIAL,
     commercial: {
-        principal: 100,
+        principal: 1000000,
         months: 240,
         rate: 3.50, 
         method: PaymentMethod.EPI
     },
     provident: {
-        principal: 50,
+        principal: 500000,
         months: 240,
         rate: 2.60,
         method: PaymentMethod.EPI
     }
   });
 
-  const [prepayAmount, setPrepayAmount] = useState(10);
+  const [prepayAmount, setPrepayAmount] = useState(100000);
   const [prepayTarget, setPrepayTarget] = useState<'commercial' | 'provident'>('commercial');
+  const [toolType, setToolType] = useState<'lump' | 'method'>('lump');
+  const [lumpStrategy, setLumpStrategy] = useState<'shorten' | 'reduce'>('shorten');
   const [prepayResult, setPrepayResult] = useState<any>(null);
   const [methodResult, setMethodResult] = useState<any>(null);
 
@@ -368,6 +378,24 @@ export const App: React.FC = () => {
   const [targetPaymentInput, setTargetPaymentInput] = useState(5000);
 
   const [smartResult, setSmartResult] = useState<any>({});
+
+  // --- Auto-Clear Results on Interaction ---
+  // 1. New Loan Tab: Clear on params change or tab switch
+  useEffect(() => {
+    setResult(null);
+  }, [params, activeTab]);
+
+  // 2. Existing Loan Tab: Clear on state changes
+  useEffect(() => {
+    setPrepayResult(null);
+    setMethodResult(null);
+  }, [existState, prepayAmount, prepayTarget, toolType, lumpStrategy, activeTab]);
+
+  // 3. Smart Strategy Tab: Clear on params change
+  useEffect(() => {
+    setSmartResult({});
+  }, [smartParams, targetYearsInput, maxInterestInput, targetPaymentInput, activeTab]);
+
 
   // Picker State
   const [yearPicker, setYearPicker] = useState<{
@@ -453,15 +481,19 @@ export const App: React.FC = () => {
   };
 
   const handlePrepayCalc = (action: 'shorten' | 'reduce') => {
+      console.log('Calculating Prepayment:', { existState, prepayAmount, action });
       const res = calculatePrepayment(existState, prepayAmount, action, prepayTarget);
+      console.log('Prepayment Result:', res);
       setPrepayResult(res);
       setMethodResult(null); // clear other result
+      setTimeout(() => existingResultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
   };
 
   const handleMethodChangeCalc = () => {
       const res = calculateMethodChange(existState, prepayTarget);
       setMethodResult(res);
       setPrepayResult(null);
+      setTimeout(() => existingResultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
   };
 
   // Smart Strategy Handlers
@@ -575,17 +607,7 @@ export const App: React.FC = () => {
                         </div>
                     </div>
 
-                    {/* New Loan Guide Text */}
-                    <div className="bg-blue-50 border border-blue-100 p-4 rounded-xl text-xs text-blue-700 leading-relaxed shadow-sm">
-                        <div className="flex items-center gap-2 font-bold mb-2 text-blue-800">
-                            <Info size={14} /> 填写指南
-                        </div>
-                        <ul className="space-y-1.5 opacity-90">
-                            <li>• <strong>贷款金额</strong>：填写入账本金（不含首付），单位为万元。</li>
-                            <li>• <strong>参考利率</strong>：LPR报价 3.50%，公积金 2.60% (5年以上)。</li>
-                            <li>• <strong>贷款年限</strong>：最长通常为 30 年。</li>
-                        </ul>
-                    </div>
+
 
                     {/* Commercial Inputs */}
                     {(params.type === LoanType.COMMERCIAL || params.type === LoanType.COMBO) && (
@@ -671,174 +693,276 @@ export const App: React.FC = () => {
                 </div>
             )}
 
-            {/* TAB 2: EXISTING / PREPAY */}
+            {/* TAB 2: EXISTING LOAN (Redesigned) */}
             {activeTab === 'existing' && (
                 <div className="animate-fade-in space-y-6">
-                    {/* Existing Loan Config */}
-                    <div className="bg-white rounded-2xl p-4 shadow-sm">
-                        <div className="text-xs font-bold text-gray-400 uppercase mb-3">当前贷款类型</div>
-                        <div className="flex gap-2">
-                             {[
-                                { val: LoanType.COMMERCIAL, label: '商贷' },
-                                { val: LoanType.PROVIDENT, label: '公积金' },
-                                { val: LoanType.COMBO, label: '组合贷' },
-                            ].map(t => (
-                                <button
-                                    key={t.val}
-                                    onClick={() => {
-                                        setExistState(s => ({...s, type: t.val}));
-                                        setPrepayResult(null);
-                                        setMethodResult(null);
-                                    }}
-                                    className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${existState.type === t.val ? 'bg-indigo-600 text-white shadow-md' : 'bg-gray-50 text-gray-500'}`}
-                                >
-                                    {t.label}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-
-                    {/* Guide Text */}
-                    <div className="bg-indigo-50 border border-indigo-100 p-4 rounded-xl text-xs text-indigo-700 leading-relaxed shadow-sm">
-                        <div className="flex items-center gap-2 font-bold mb-2 text-indigo-800">
-                            <Info size={14} /> 填写指南
-                        </div>
-                        <ul className="space-y-1.5 opacity-90">
-                            <li>• <strong>剩余本金</strong>：请查询银行APP“当前剩余未还本金”（非原始贷款额）。</li>
-                            <li>• <strong>剩余期数</strong>：即剩余还款月数（如剩余20年则填240）。</li>
-                            <li>• <strong>当前利率</strong>：请输入当前的实际执行利率（LPR+基点）。</li>
-                        </ul>
-                    </div>
-
-                    {/* Inputs */}
-                    <div className="bg-white rounded-2xl px-5 py-2 shadow-sm">
-                        {/* Commercial Inputs */}
-                        {(existState.type === LoanType.COMMERCIAL || existState.type === LoanType.COMBO) && (
-                            <>
-                                {existState.type === LoanType.COMBO && <div className="py-3 text-xs font-bold text-indigo-600 border-b border-indigo-50 uppercase">商贷部分</div>}
-                                <InputCell label="剩余本金" value={existState.commercial.principal} onChange={(e: any) => setExistState({...existState, commercial: {...existState.commercial, principal: Number(e.target.value)}})} unit="万元" />
-                                <InputCell label="剩余期数" value={existState.commercial.months} onChange={(e: any) => setExistState({...existState, commercial: {...existState.commercial, months: Number(e.target.value)}})} unit="月" />
-                                <InputCell label="当前利率" value={existState.commercial.rate} onChange={(e: any) => setExistState({...existState, commercial: {...existState.commercial, rate: Number(e.target.value)}})} unit="%" />
-                                <div className="flex items-center justify-between py-4 border-b border-gray-100 last:border-0">
-                                    <span className="text-gray-700 font-medium">还款方式</span>
-                                    <select 
-                                        value={existState.commercial.method} 
-                                        onChange={e => setExistState({...existState, commercial: {...existState.commercial, method: e.target.value as PaymentMethod}})}
-                                        className="text-right font-bold text-slate-900 bg-transparent outline-none dir-rtl"
-                                    >
-                                        <option value={PaymentMethod.EPI}>等额本息</option>
-                                        <option value={PaymentMethod.EP}>等额本金</option>
-                                    </select>
-                                </div>
-                            </>
-                        )}
-
-                        {/* Provident Inputs */}
-                        {(existState.type === LoanType.PROVIDENT || existState.type === LoanType.COMBO) && (
-                             <>
-                                {existState.type === LoanType.COMBO && <div className="py-3 text-xs font-bold text-orange-600 border-b border-orange-50 mt-4 uppercase">公积金部分</div>}
-                                <InputCell label="剩余本金" value={existState.provident.principal} onChange={(e: any) => setExistState({...existState, provident: {...existState.provident, principal: Number(e.target.value)}})} unit="万元" />
-                                <InputCell label="剩余期数" value={existState.provident.months} onChange={(e: any) => setExistState({...existState, provident: {...existState.provident, months: Number(e.target.value)}})} unit="月" />
-                                <InputCell label="当前利率" value={existState.provident.rate} onChange={(e: any) => setExistState({...existState, provident: {...existState.provident, rate: Number(e.target.value)}})} unit="%" />
-                                <div className="flex items-center justify-between py-4 border-b border-gray-100 last:border-0">
-                                    <span className="text-gray-700 font-medium">还款方式</span>
-                                    <select 
-                                        value={existState.provident.method} 
-                                        onChange={e => setExistState({...existState, provident: {...existState.provident, method: e.target.value as PaymentMethod}})}
-                                        className="text-right font-bold text-slate-900 bg-transparent outline-none dir-rtl"
-                                    >
-                                        <option value={PaymentMethod.EPI}>等额本息</option>
-                                        <option value={PaymentMethod.EP}>等额本金</option>
-                                    </select>
-                                </div>
-                             </>
-                        )}
-                    </div>
-
-                    {/* Action Cards */}
-                    <div className="space-y-4">
-                         {/* Card 1: Lump Sum */}
-                        <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100">
-                            <div className="flex items-center gap-2 mb-4">
-                                <div className="p-2 bg-rose-50 rounded-lg text-rose-500"><Banknote size={18}/></div>
-                                <h3 className="font-bold text-slate-800">一次性提前还本</h3>
+                    {/* 1. Loan Profile Section */}
+                    <div>
+                        {/* Loan Type Selector (New Loan Style) */}
+                        <div className="bg-white rounded-2xl p-4 shadow-sm mb-6">
+                            <div className="text-xs font-bold text-gray-400 uppercase mb-3">贷款类型</div>
+                            <div className="grid grid-cols-3 gap-3">
+                                {[
+                                    { val: LoanType.COMMERCIAL, label: '商业贷款' },
+                                    { val: LoanType.PROVIDENT, label: '公积金' },
+                                    { val: LoanType.COMBO, label: '组合贷款' },
+                                ].map(type => {
+                                    const isActive = existState.type === type.val;
+                                    return (
+                                        <button
+                                            key={type.val}
+                                            onClick={() => {
+                                                setExistState(s => ({...s, type: type.val}));
+                                                setPrepayResult(null);
+                                                setMethodResult(null);
+                                            }}
+                                            className={`
+                                                relative flex items-center justify-center py-3.5 rounded-xl text-sm font-bold transition-all duration-200
+                                                ${isActive 
+                                                    ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200 translate-y-[-2px]' 
+                                                    : 'bg-white text-gray-500 hover:bg-gray-50 border border-gray-100'
+                                                }
+                                            `}
+                                        >
+                                            {type.label}
+                                        </button>
+                                    )
+                                })}
                             </div>
+                        </div>
+
+                        {/* Combo Loan Switcher (only for Combo) */}
+                        {existState.type === LoanType.COMBO && (
+                            <div className="bg-white rounded-2xl p-1.5 flex mb-4 shadow-sm border border-slate-100">
+                                <button
+                                    onClick={() => { setPrepayTarget('commercial'); setPrepayResult(null); setMethodResult(null); }}
+                                    className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all ${prepayTarget === 'commercial' ? 'bg-indigo-50 text-indigo-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                                >
+                                    商业贷款部分
+                                </button>
+                                <button
+                                    onClick={() => { setPrepayTarget('provident'); setPrepayResult(null); setMethodResult(null); }}
+                                    className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all ${prepayTarget === 'provident' ? 'bg-emerald-50 text-emerald-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                                >
+                                    公积金部分
+                                </button>
+                            </div>
+                        )}
+
+                        {/* Loan Details Inputs (New Loan Style) */}
+                        <div className="bg-white rounded-2xl px-5 py-2 shadow-sm">
+                            <InputCell 
+                                label="剩余本金" 
+                                value={prepayTarget === 'commercial' ? existState.commercial.principal : existState.provident.principal}
+                                onChange={(e: any) => {
+                                    const val = Number(e.target.value);
+                                    setExistState(prev => ({
+                                        ...prev,
+                                        [prepayTarget]: { ...prev[prepayTarget], principal: val }
+                                    }));
+                                }}
+                                unit="元"
+                                placeholder="0"
+                                useThousandSeparator={true}
+                            />
+                            <InputCell 
+                                label="剩余期限" 
+                                value={prepayTarget === 'commercial' ? existState.commercial.months : existState.provident.months}
+                                onChange={(e: any) => {
+                                    const val = Number(e.target.value);
+                                    setExistState(prev => ({
+                                        ...prev,
+                                        [prepayTarget]: { ...prev[prepayTarget], months: val }
+                                    }));
+                                }}
+                                unit="月"
+                                placeholder="0"
+                            />
+                            <InputCell 
+                                label="当前利率" 
+                                value={prepayTarget === 'commercial' ? existState.commercial.rate : existState.provident.rate}
+                                onChange={(e: any) => {
+                                    const val = Number(e.target.value);
+                                    setExistState(prev => ({
+                                        ...prev,
+                                        [prepayTarget]: { ...prev[prepayTarget], rate: val }
+                                    }));
+                                }}
+                                unit="%"
+                                step="0.01"
+                                placeholder="0.00"
+                            />
+                            <div className="flex items-center justify-between py-4">
+                                <label className="text-gray-700 font-medium">还款方式</label>
+                                <div className="flex bg-slate-100 rounded-lg p-1">
+                                    <button
+                                        onClick={() => setExistState(prev => ({ ...prev, [prepayTarget]: { ...prev[prepayTarget], method: PaymentMethod.EPI } }))}
+                                        className={`px-3 py-1.5 rounded-md text-sm font-bold transition-all ${
+                                            (prepayTarget === 'commercial' ? existState.commercial.method : existState.provident.method) === PaymentMethod.EPI
+                                            ? 'bg-white text-indigo-600 shadow-sm' 
+                                            : 'text-gray-400'
+                                        }`}
+                                    >
+                                        等额本息
+                                    </button>
+                                    <button
+                                        onClick={() => setExistState(prev => ({ ...prev, [prepayTarget]: { ...prev[prepayTarget], method: PaymentMethod.EP } }))}
+                                        className={`px-3 py-1.5 rounded-md text-sm font-bold transition-all ${
+                                            (prepayTarget === 'commercial' ? existState.commercial.method : existState.provident.method) === PaymentMethod.EP
+                                            ? 'bg-white text-indigo-600 shadow-sm' 
+                                            : 'text-gray-400'
+                                        }`}
+                                    >
+                                        等额本金
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* 2. Action Area */}
+                    <div>
+                        {/* Tool Switcher */}
+                        <div className="bg-slate-100 p-1 rounded-2xl flex mb-6">
+                            <button
+                                onClick={() => { setToolType('lump'); setPrepayResult(null); setMethodResult(null); }}
+                                className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 ${toolType === 'lump' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                            >
+                                <PiggyBank size={18} />
+                                一次性提前还款
+                            </button>
+                            <button
+                                onClick={() => { setToolType('method'); setPrepayResult(null); setMethodResult(null); }}
+                                className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 ${toolType === 'method' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                            >
+                                <RefreshCw size={18} />
+                                变更还款方式
+                            </button>
+                        </div>
+
+                        {/* Action Content */}
+                        <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+                            {toolType === 'lump' ? (
+                                <div className="space-y-6 animate-fade-in">
+                                    <InputCell 
+                                        label="提前还款金额" 
+                                        value={prepayAmount} 
+                                        onChange={(e: any) => setPrepayAmount(Number(e.target.value))} 
+                                        unit="元"
+                                        placeholder="0"
+                                        useThousandSeparator={true}
+                                    />
+
+                                    <div className="pt-2">
+                                        <label className="text-gray-700 font-medium mb-3 block">处理方式</label>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <button 
+                                                onClick={() => setLumpStrategy('shorten')}
+                                                className={`p-4 rounded-xl border-2 text-left transition-all ${lumpStrategy === 'shorten' ? 'border-indigo-600 bg-indigo-50/50' : 'border-slate-100 hover:border-slate-200'}`}
+                                            >
+                                                <div className={`font-bold mb-1 ${lumpStrategy === 'shorten' ? 'text-indigo-700' : 'text-slate-700'}`}>缩短年限</div>
+                                                <div className="text-xs text-slate-400">月供不变，最省利息</div>
+                                            </button>
+                                            <button 
+                                                onClick={() => setLumpStrategy('reduce')}
+                                                className={`p-4 rounded-xl border-2 text-left transition-all ${lumpStrategy === 'reduce' ? 'border-indigo-600 bg-indigo-50/50' : 'border-slate-100 hover:border-slate-200'}`}
+                                            >
+                                                <div className={`font-bold mb-1 ${lumpStrategy === 'reduce' ? 'text-indigo-700' : 'text-slate-700'}`}>减少月供</div>
+                                                <div className="text-xs text-slate-400">年限不变，减轻压力</div>
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <button 
+                                        onClick={() => handlePrepayCalc(lumpStrategy)} 
+                                        className="w-full bg-slate-900 text-white font-bold text-lg py-4 rounded-2xl shadow-lg shadow-slate-200 active:scale-95 transition-all flex items-center justify-center gap-2 hover:bg-slate-800"
+                                    >
+                                        <Calculator size={20} />
+                                        开始计算
+                                    </button>
+                                </div>
+                            ) : (
+                                <div className="space-y-8 animate-fade-in py-4">
+                                    <div className="flex items-center justify-between px-4">
+                                        <div className="text-center">
+                                            <div className="text-sm text-gray-400 mb-2">当前方式</div>
+                                            <div className="font-bold text-slate-700 text-lg">
+                                                {(prepayTarget === 'commercial' ? existState.commercial.method : existState.provident.method) === PaymentMethod.EPI ? '等额本息' : '等额本金'}
+                                            </div>
+                                        </div>
+                                        <div className="text-indigo-200">
+                                            <ArrowRight size={32} />
+                                        </div>
+                                        <div className="text-center">
+                                            <div className="text-sm text-indigo-500 mb-2 font-bold">变更后</div>
+                                            <div className="font-black text-indigo-600 text-xl">
+                                                {(prepayTarget === 'commercial' ? existState.commercial.method : existState.provident.method) === PaymentMethod.EPI ? '等额本金' : '等额本息'}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <button 
+                                        onClick={handleMethodChangeCalc} 
+                                        className="w-full bg-slate-900 text-white font-bold text-lg py-4 rounded-2xl shadow-lg shadow-slate-200 active:scale-95 transition-all flex items-center justify-center gap-2 hover:bg-slate-800"
+                                    >
+                                        <RefreshCw size={20} />
+                                        确认变更并计算
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* 3. Result Display (Light Style) */}
+                    {(prepayResult || methodResult) && (
+                        <div ref={existingResultsRef} className={`bg-white rounded-2xl p-6 shadow-lg border-2 animate-fade-in-up ${(prepayResult || methodResult).savedInterest >= 0 ? 'border-emerald-500 shadow-emerald-50' : 'border-rose-200'}`}>
                             
-                            {existState.type === LoanType.COMBO && (
-                                <div className="bg-gray-50 p-1 rounded-lg flex mb-4">
-                                     <button onClick={() => setPrepayTarget('commercial')} className={`flex-1 py-1.5 rounded-md text-xs font-bold transition-all ${prepayTarget === 'commercial' ? 'bg-white shadow text-indigo-600' : 'text-gray-400'}`}>优先还商贷</button>
-                                     <button onClick={() => setPrepayTarget('provident')} className={`flex-1 py-1.5 rounded-md text-xs font-bold transition-all ${prepayTarget === 'provident' ? 'bg-white shadow text-orange-600' : 'text-gray-400'}`}>优先还公积金</button>
+                            {(prepayResult || methodResult).savedInterest >= 0 && (
+                                <div className="flex items-center gap-2 text-emerald-600 font-bold mb-4 bg-emerald-50 w-fit px-3 py-1 rounded-full text-xs">
+                                    <TrendingDown size={14} /> 优化建议
                                 </div>
                             )}
 
-                            <InputCell label="还款金额" value={prepayAmount} onChange={(e:any) => setPrepayAmount(Number(e.target.value))} unit="万元" />
-                            
-                            <div className="grid grid-cols-2 gap-3 mt-4">
-                                <button onClick={() => handlePrepayCalc('shorten')} className="bg-rose-500 active:bg-rose-600 text-white py-3 rounded-xl font-bold text-sm shadow-lg shadow-rose-200">
-                                    缩短年限 (省息)
-                                </button>
-                                <button onClick={() => handlePrepayCalc('reduce')} className="bg-white border border-slate-200 text-slate-600 py-3 rounded-xl font-bold text-sm">
-                                    减少月供 (减压)
-                                </button>
-                            </div>
-                        </div>
-
-                        {/* Card 2: Method Change */}
-                        <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100">
-                            <div className="flex items-center gap-2 mb-4">
-                                <div className="p-2 bg-indigo-50 rounded-lg text-indigo-500"><TrendingDown size={18}/></div>
-                                <h3 className="font-bold text-slate-800">变更还款方式</h3>
-                            </div>
-                            <div className="flex items-center justify-between bg-slate-50 p-3 rounded-xl mb-4 text-sm">
-                                <span className="font-bold text-slate-500">
-                                    {((existState.type === LoanType.COMBO || existState.type === LoanType.COMMERCIAL) && prepayTarget === 'commercial') ? 
-                                        (existState.commercial.method === PaymentMethod.EPI ? '等额本息' : '等额本金') : 
-                                        (existState.provident.method === PaymentMethod.EPI ? '等额本息' : '等额本金')
-                                    }
-                                </span>
-                                <ArrowRight size={16} className="text-gray-300"/>
-                                <span className="font-bold text-indigo-600">
-                                     {((existState.type === LoanType.COMBO || existState.type === LoanType.COMMERCIAL) && prepayTarget === 'commercial') ? 
-                                        (existState.commercial.method === PaymentMethod.EPI ? '等额本金' : '等额本息') : 
-                                        (existState.provident.method === PaymentMethod.EPI ? '等额本金' : '等额本息')
-                                    }
-                                </span>
-                            </div>
-                            <button onClick={handleMethodChangeCalc} className="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold text-sm shadow-lg shadow-indigo-200">
-                                立即试算变更
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* Results */}
-                    {(prepayResult || methodResult) && (
-                        <div className="animate-fade-in-up mt-6">
-                            <div className="bg-slate-900 rounded-3xl p-6 text-white shadow-2xl relative overflow-hidden">
-                                <div className="relative z-10">
-                                    <div className="text-center text-gray-400 text-xs mb-6 uppercase tracking-widest">
-                                         {prepayResult ? '提前还款试算结果' : '还款方式变更结果'}
+                            <div className="flex items-end justify-between mb-8">
+                                <div>
+                                    <div className="text-gray-400 text-xs font-bold uppercase tracking-wider mb-1">
+                                        {(prepayResult || methodResult).savedInterest >= 0 ? '预计节省利息' : '利息将增加'}
                                     </div>
-                                    <div className="grid grid-cols-2 gap-6 mb-6">
-                                        <div>
-                                            <div className="text-gray-400 text-xs mb-1">新月供 (合计)</div>
-                                            <div className="text-2xl font-black text-emerald-400">
-                                                ¥{formatMoney((prepayResult || methodResult).newMonthlyPayment)}
-                                            </div>
-                                        </div>
-                                        <div>
-                                            <div className="text-gray-400 text-xs mb-1">
-                                                {(prepayResult || methodResult).savedInterest >= 0 ? '总利息节省' : '总利息增加'}
-                                            </div>
-                                            <div className={`text-2xl font-black ${(prepayResult || methodResult).savedInterest >= 0 ? 'text-rose-400' : 'text-rose-500'}`}>
-                                                ¥{(Math.abs((prepayResult || methodResult).savedInterest) / 10000).toFixed(2)}万
-                                            </div>
-                                        </div>
+                                    <div className={`text-4xl font-black ${(prepayResult || methodResult).savedInterest >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                        <span className="text-2xl mr-1">¥</span>
+                                        {(Math.abs((prepayResult || methodResult).savedInterest) / 10000).toFixed(2)}
+                                        <span className="text-lg ml-1 text-gray-400 font-bold">万</span>
                                     </div>
-                                    <div className="bg-white/10 rounded-xl p-3 flex justify-between items-center">
-                                        <span className="text-xs text-gray-300">
-                                            {(prepayResult || methodResult).target === 'commercial' ? '商贷' : '公积金'}剩余年限
+                                </div>
+                            </div>
+
+                            <div className="bg-slate-50 rounded-xl p-4 space-y-4">
+                                <div className="flex justify-between items-center pb-4 border-b border-slate-200">
+                                    <span className="text-gray-500 font-medium">变更后月供</span>
+                                    <span className="font-bold text-slate-800 text-lg">
+                                        ¥{formatMoney((prepayResult || methodResult).newMonthlyPayment)}
+                                    </span>
+                                </div>
+                                <div className="flex justify-between items-center pb-4 border-b border-slate-200">
+                                    <span className="text-gray-500 font-medium">剩余还款期</span>
+                                    <div className="font-bold text-slate-800 flex items-center gap-2">
+                                        {((prepayResult || methodResult).newTermMonths / 12).toFixed(1)} 年
+                                        {prepayResult && prepayResult.savedMonths > 0 && (
+                                            <span className="text-xs bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded font-bold">
+                                                省{(prepayResult.savedMonths / 12).toFixed(1)}年
+                                            </span>
+                                        )}
+                                    </div>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                    <span className="text-gray-500 font-medium">总利息变化</span>
+                                    <div className="font-bold text-slate-800">
+                                        <span className="line-through text-gray-300 text-sm mr-2">
+                                            {((prepayResult || methodResult).oldTotalInterest / 10000).toFixed(2)}
                                         </span>
-                                        <span className="font-bold text-blue-300">{((prepayResult || methodResult).newTermMonths / 12).toFixed(1)}年</span>
+                                        <span>
+                                            {((prepayResult || methodResult).newTotalInterest / 10000).toFixed(2)}万
+                                        </span>
                                     </div>
                                 </div>
                             </div>
@@ -1079,25 +1203,25 @@ export const App: React.FC = () => {
                                      </div>
                                      <div>
                                          <h3 className="font-bold text-slate-800">降低月供</h3>
-                                         <p className="text-xs text-gray-400">当前月供 {formatMoney(smartBaseData.monthly)}，我想降到...</p>
-                                     </div>
-                                 </div>
-                                 
-                                 <div className="bg-slate-50 rounded-xl p-4 flex items-center justify-between relative">
-                                     <label className="text-sm font-bold text-slate-600">期望月供</label>
-                                     <div className="flex items-center gap-2">
-                                         <BareInput 
-                                             inputMode="decimal"
-                                             max={Math.round(smartBaseData.monthly) - 1}
-                                             value={targetPaymentInput}
-                                             onChange={(e: any) => setTargetPaymentInput(Number(e.target.value))}
-                                             onBlur={(e: any) => handleSmartPayment(Number(e.target.value))} 
-                                             className="w-20 text-center bg-white border border-slate-200 rounded-lg py-1.5 font-bold text-emerald-500 outline-none focus:ring-2 focus:ring-emerald-100" 
-                                         />
-                                         <span className="text-sm font-bold text-slate-400">元</span>
-                                     </div>
-                                     <div className="absolute -bottom-4 right-0 text-[10px] text-gray-400">
-                                         {'< '}{formatMoney(smartBaseData.monthly)}
+                                         <p className="text-xs text-gray-400">当前月供 {formatMoney(smartBaseData.monthly)} 元，我想降到...</p>
+                                    </div>
+                                </div>
+                                
+                                <div className="bg-slate-50 rounded-xl p-4 flex items-center justify-between relative">
+                                    <label className="text-sm font-bold text-slate-600">期望月供</label>
+                                    <div className="flex items-center gap-2">
+                                        <BareInput 
+                                            inputMode="decimal"
+                                            max={Math.round(smartBaseData.monthly) - 1}
+                                            value={targetPaymentInput}
+                                            onChange={(e: any) => setTargetPaymentInput(Number(e.target.value))}
+                                            onBlur={(e: any) => handleSmartPayment(Number(e.target.value))} 
+                                            className="w-20 text-center bg-white border border-slate-200 rounded-lg py-1.5 font-bold text-emerald-500 outline-none focus:ring-2 focus:ring-emerald-100" 
+                                        />
+                                        <span className="text-sm font-bold text-slate-400">元</span>
+                                    </div>
+                                    <div className="absolute -bottom-4 right-0 text-[10px] text-gray-400">
+                                        {'< '}{formatMoney(smartBaseData.monthly)}元
                                      </div>
                                  </div>
                              </div>
@@ -1119,12 +1243,12 @@ export const App: React.FC = () => {
                                      <div className="grid grid-cols-2 gap-4 text-xs text-slate-500 border-t border-emerald-100 pt-3">
                                         <div>
                                             <div className="mb-1">原月供</div>
-                                            <div className="font-bold text-slate-700">¥{formatMoney(smartBaseData.monthly)}</div>
+                                            <div className="font-bold text-slate-700">¥{formatMoney(smartBaseData.monthly)}元</div>
                                         </div>
                                         <div className="text-right">
                                             <div className="mb-1">新月供</div>
                                             <div className="font-bold text-emerald-600 flex items-center justify-end gap-1">
-                                                ¥{targetPaymentInput.toFixed(2)}
+                                                ¥{targetPaymentInput.toFixed(2)}元
                                                 <TrendingDown size={12}/>
                                             </div>
                                         </div>

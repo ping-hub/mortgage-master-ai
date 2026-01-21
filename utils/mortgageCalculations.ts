@@ -183,7 +183,7 @@ export const calculateMortgage = (params: LoanParams): FullComparison => {
 
 // Helper: Calculate standard schedule for a single loan part
 const calculatePartSchedule = (part: ExistingLoanPart): CalculationResult => {
-    const principal = part.principal * 10000;
+    const principal = part.principal;
     if (principal <= 0) return createEmptyResult();
     
     return part.method === PaymentMethod.EPI
@@ -194,11 +194,10 @@ const calculatePartSchedule = (part: ExistingLoanPart): CalculationResult => {
 // Helper: Calculate single loan prepayment impact (pure logic)
 const calculateSinglePrepayment = (
     part: ExistingLoanPart,
-    prepayAmountWan: number,
+    prepayAmount: number,
     action: 'shorten' | 'reduce'
 ): { schedule: CalculationResult, savedMonths: number } => {
-    const principal = part.principal * 10000;
-    const prepayAmount = prepayAmountWan * 10000;
+    const principal = part.principal;
     const newPrincipal = Math.max(0, principal - prepayAmount);
 
     let newSchedule: CalculationResult;
@@ -239,7 +238,7 @@ const calculateSinglePrepayment = (
 
 export const calculatePrepayment = (
     state: ExistingLoanState,
-    prepayAmountWan: number,
+    prepayAmount: number,
     action: 'shorten' | 'reduce',
     target: 'commercial' | 'provident'
 ): PrepaymentResult => {
@@ -263,11 +262,11 @@ export const calculatePrepayment = (
     if (state.type === LoanType.PROVIDENT) effectiveTarget = 'provident';
 
     if (effectiveTarget === 'commercial' && hasComm) {
-        const res = calculateSinglePrepayment(state.commercial, prepayAmountWan, action);
+        const res = calculateSinglePrepayment(state.commercial, prepayAmount, action);
         commNew = res.schedule;
         savedMonths = res.savedMonths;
     } else if (effectiveTarget === 'provident' && hasProv) {
-        const res = calculateSinglePrepayment(state.provident, prepayAmountWan, action);
+        const res = calculateSinglePrepayment(state.provident, prepayAmount, action);
         provNew = res.schedule;
         savedMonths = res.savedMonths;
     }
@@ -321,14 +320,14 @@ export const calculateMethodChange = (
         const newMethod = part.method === PaymentMethod.EPI ? PaymentMethod.EP : PaymentMethod.EPI;
         // Recalculate full schedule with new method
         commNew = newMethod === PaymentMethod.EPI 
-            ? calculateEPI(part.principal * 10000, part.rate, part.months)
-            : calculateEP(part.principal * 10000, part.rate, part.months);
+            ? calculateEPI(part.principal, part.rate, part.months)
+            : calculateEP(part.principal, part.rate, part.months);
     } else if (effectiveTarget === 'provident' && hasProv) {
         const part = state.provident;
         const newMethod = part.method === PaymentMethod.EPI ? PaymentMethod.EP : PaymentMethod.EPI;
         provNew = newMethod === PaymentMethod.EPI 
-            ? calculateEPI(part.principal * 10000, part.rate, part.months)
-            : calculateEP(part.principal * 10000, part.rate, part.months);
+            ? calculateEPI(part.principal, part.rate, part.months)
+            : calculateEP(part.principal, part.rate, part.months);
     }
 
     const newTotalInterest = commNew.totalInterest + provNew.totalInterest;
