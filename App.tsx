@@ -129,7 +129,7 @@ const YearSheet = ({ isOpen, onClose, value, onSelect }: { isOpen: boolean, onCl
 };
 
 // Helper for Cell Style Input
-const InputCell = ({ label, value, onChange, unit, step, placeholder = "0", actionIcon, onAction, readOnly = false, onClick, useThousandSeparator = false }: any) => {
+const InputCell = ({ label, value, onChange, unit, step, placeholder = "0", actionIcon, onAction, readOnly = false, onClick, useThousandSeparator = false, max }: any) => {
     // Format helper: adds commas to integer part
     const format = (val: string) => {
         if (!useThousandSeparator) return val;
@@ -185,6 +185,11 @@ const InputCell = ({ label, value, onChange, unit, step, placeholder = "0", acti
         if (clean.length > 1 && clean.startsWith('0') && clean[1] !== '.') {
             clean = clean.replace(/^0+/, '');
             if (clean === '') clean = '0';
+        }
+
+        if (max !== undefined) {
+            const val = parseFloat(clean);
+            if (!isNaN(val) && val > max) return;
         }
         
         setLocalValue(clean); // Show raw number while typing
@@ -619,6 +624,7 @@ export const App: React.FC = () => {
                                 onChange={(e: any) => setParams({...params, commercialAmount: Number(e.target.value)})} 
                                 unit="万元" 
                                 placeholder="请输入"
+                                max={100000}
                             />
                              <InputCell 
                                 label="商贷利率" 
@@ -627,6 +633,7 @@ export const App: React.FC = () => {
                                 onChange={(e: any) => setParams({...params, commercialRate: Number(e.target.value)})} 
                                 unit="%" 
                                 placeholder="例: 3.50"
+                                max={30}
                              />
                              <InputCell 
                                 label="商贷年限" 
@@ -648,6 +655,7 @@ export const App: React.FC = () => {
                                 onChange={(e: any) => setParams({...params, providentAmount: Number(e.target.value)})} 
                                 unit="万元" 
                                 placeholder="请输入"
+                                max={100000}
                              />
                              <InputCell 
                                 label="公积金利率" 
@@ -656,6 +664,7 @@ export const App: React.FC = () => {
                                 onChange={(e: any) => setParams({...params, providentRate: Number(e.target.value)})} 
                                 unit="%" 
                                 placeholder="例: 2.60"
+                                max={30}
                              />
                              <InputCell 
                                 label="公积金年限" 
@@ -764,6 +773,7 @@ export const App: React.FC = () => {
                                 unit="元"
                                 placeholder="0"
                                 useThousandSeparator={true}
+                                max={100000000}
                             />
                             <InputCell 
                                 label="剩余期限" 
@@ -777,6 +787,7 @@ export const App: React.FC = () => {
                                 }}
                                 unit="月"
                                 placeholder="0"
+                                max={360}
                             />
                             <InputCell 
                                 label="当前利率" 
@@ -791,6 +802,7 @@ export const App: React.FC = () => {
                                 unit="%"
                                 step="0.01"
                                 placeholder="0.00"
+                                max={30}
                             />
                             <div className="flex items-center justify-between py-4">
                                 <label className="text-gray-700 font-medium">还款方式</label>
@@ -851,6 +863,7 @@ export const App: React.FC = () => {
                                         unit="元"
                                         placeholder="0"
                                         useThousandSeparator={true}
+                                        max={100000000}
                                     />
 
                                     <div className="pt-2">

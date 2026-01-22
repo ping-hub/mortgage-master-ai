@@ -1,21 +1,38 @@
-// api/gemini.ts
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 export default async function handler(req: any, res: any) {
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "只支持 POST 请求" });
+  // CORS support
+  res.setHeader('Access-Control-Allow-Credentials', true);
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
+  res.setHeader(
+    'Access-Control-Allow-Headers',
+    'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
+  );
+
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
   }
 
-  const { prompt } = req.body;
-
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    return res.status(500).json({ error: "服务器未配置 API Key" });
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Method not allowed" });
   }
 
   try {
+    const { prompt } = req.body;
+    
+    if (!prompt) {
+      return res.status(400).json({ error: "Prompt is required" });
+    }
+
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      console.error("Server API Key missing");
+      return res.status(500).json({ error: "Server configuration error" });
+    }
+
     const genAI = new GoogleGenerativeAI(apiKey);
-    // 使用最新的稳定模型
     const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
 
     const systemPrompt = `
@@ -35,28 +52,22 @@ export default async function handler(req: any, res: any) {
       - Default commercial rate: 3.5%, provident rate: 2.6%
       - Default years: 30
       - If mentions provident fund → prefer 'provident' or 'combo'
-      Return ONLY valid JSON, no extra text.
+      - Only return the values that are mentioned or implied.
+      - Return ONLY valid JSON, no extra text.
     `;
 
     const result = await model.generateContent(`${systemPrompt}\n\nUser Input: ${prompt}`);
     const text = result.response.text();
 
-    // 安全提取 JSON
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
-      throw new Error("未检测到有效 JSON");
+      throw new Error("No valid JSON found in response");
     }
 
     const data = JSON.parse(jsonMatch[0]);
     res.status(200).json({ data });
   } catch (error: any) {
     console.error("Gemini API Error:", error);
-    res.status(500).json({ error: "AI 解析失败: " + error.message });
+    res.status(500).json({ error: "AI processing failed: " + (error.message || "Unknown error") });
   }
 }
-
-export const config = {
-  api: {
-    bodyParser: true,
-  },
-};

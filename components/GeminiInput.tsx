@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Sparkles, Send, X, Loader2 } from 'lucide-react';
+import { Sparkles, Send, X, Loader2, AlertCircle } from 'lucide-react';
 import { LoanParams } from '../types';
 
 interface GeminiInputProps {
@@ -10,11 +10,14 @@ export const GeminiInput: React.FC<GeminiInputProps> = ({ onUpdate }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [prompt, setPrompt] = useState('');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async () => {
     if (!prompt.trim()) return;
 
     setLoading(true);
+    setError(null);
+
     try {
       const response = await fetch('/api/gemini', {
         method: 'POST',
@@ -24,26 +27,33 @@ export const GeminiInput: React.FC<GeminiInputProps> = ({ onUpdate }) => {
         body: JSON.stringify({ prompt }),
       });
 
+      const result = await response.json();
+
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || '请求失败');
+        throw new Error(result.error || '请求失败');
       }
 
-      const { data } = await response.json();
-
-      // 直接把后端解析好的数据传给父组件
-      onUpdate(data);
-
-      // 成功后关闭弹窗、清空输入
-      setIsOpen(false);
-      setPrompt('');
+      if (result.data) {
+        // 直接把后端解析好的数据传给父组件
+        onUpdate(result.data);
+        
+        // 成功后关闭弹窗、清空输入
+        setIsOpen(false);
+        setPrompt('');
+      }
     } catch (e: any) {
       console.error("AI 调用失败:", e);
-      alert("AI 解析失败：" + e.message + "\n请检查输入或稍后重试");
+      setError("AI 解析失败：" + e.message);
     } finally {
       setLoading(false);
     }
   };
+
+  const handleClose = () => {
+    setIsOpen(false);
+    setError(null);
+  };
+
 
   return (
     <>
@@ -63,7 +73,7 @@ export const GeminiInput: React.FC<GeminiInputProps> = ({ onUpdate }) => {
                 <Sparkles size={20} className="text-purple-600" />
                 告诉我你的贷款情况
               </h3>
-              <button onClick={() => setIsOpen(false)} className="text-gray-400 hover:text-gray-600">
+              <button onClick={handleClose} className="text-gray-400 hover:text-gray-600">
                 <X size={24} />
               </button>
             </div>
@@ -74,10 +84,20 @@ export const GeminiInput: React.FC<GeminiInputProps> = ({ onUpdate }) => {
 
             <textarea
               value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              className="w-full h-32 bg-slate-50 border border-slate-200 rounded-xl p-4 focus:ring-2 focus:ring-purple-500 focus:outline-none resize-none text-gray-700"
+              onChange={(e) => {
+                setPrompt(e.target.value);
+                if (error) setError(null);
+              }}
+              className={`w-full h-32 bg-slate-50 border rounded-xl p-4 focus:ring-2 focus:ring-purple-500 focus:outline-none resize-none text-gray-700 ${error ? 'border-red-300 ring-1 ring-red-100' : 'border-slate-200'}`}
               placeholder="在此输入..."
             />
+
+            {error && (
+              <div className="mt-3 text-red-500 text-sm flex items-center gap-2 bg-red-50 p-2 rounded-lg animate-fade-in">
+                <AlertCircle size={16} />
+                <span>{error}</span>
+              </div>
+            )}
 
             <div className="flex justify-end mt-4">
               <button 
